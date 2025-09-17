@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Home, Clipboard, Camera, Settings, User } from "lucide-react";
+import { Home, Wrench, Clipboard, Camera, User } from "lucide-react";
 
 interface NavigationBarProps {
   activeTab: string;
@@ -17,6 +17,7 @@ export default function NavigationBar({
 }: NavigationBarProps) {
   const tabs = [
     { id: "projects", label: "Projects", icon: Home },
+    { id: "equipment", label: "Equipment", icon: Wrench },
     { id: "checklists", label: "Tasks", icon: Clipboard },
     { id: "camera", label: "Camera", icon: Camera },
     { id: "profile", label: "Profile", icon: User },
@@ -40,7 +41,7 @@ export default function NavigationBar({
       )}
       
       {/* Navigation tabs */}
-      <div className="grid grid-cols-4 p-2 gap-1">
+      <div className="grid grid-cols-5 p-2 gap-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
