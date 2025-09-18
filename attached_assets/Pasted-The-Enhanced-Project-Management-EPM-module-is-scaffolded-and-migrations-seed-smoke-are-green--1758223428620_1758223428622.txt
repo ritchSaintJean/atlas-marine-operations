@@ -1,0 +1,77 @@
+The Enhanced Project Management (EPM) module is scaffolded and migrations + seed + smoke are green. Now I need you to finish the implementation:
+
+Services (src/domain/epm/EpmService.ts)
+
+Complete real logic for:
+
+createStages (insert stages with Drizzle).
+
+listStagesWithPct (compute % complete using checklist_items).
+
+instantiateChecklist (copy template items → checklist).
+
+getChecklist (return checklist with required items first).
+
+updateChecklistItem (update value/status/assignee, set completed_at).
+
+approveStage (transaction → enforce all required complete, write stage_approvals + audit_logs, trigger hooks for notifications, safety forms, inventory, equipment).
+
+getProjectProgress (aggregate per-stage % + overall).
+
+Enforce RBAC: techs edit their own items; supervisors approve; admins can override (log override).
+
+API Routes (src/routes/epm.routes.ts)
+
+Wire routes to real service logic.
+
+Validate all input/output with Zod from src/contracts/epm.ts.
+
+UI Integration (React + shadcn)
+
+Hook StageRail, ChecklistView, ApprovalDialog to the real API with React Query.
+
+Show progress %, disable approval until required complete.
+
+Notifications & Hooks
+
+Implement idempotent event publishing: stage.approval.requested, stage.approved, checklist.blocked.
+
+On approve:
+
+Generate safety forms from gate_rules.
+
+Reserve inventory.
+
+If commissioning stage, seed equipment maintenance jobs.
+
+Tests & Scripts
+
+Expand scripts/smoke-tests.ts to assert:
+
+Approve fails until required complete.
+
+Approve passes once complete.
+
+RBAC: tech cannot approve, supervisor can.
+
+Progress endpoint reflects correct %.
+
+Constraints:
+
+No hardcoded URLs or secrets. Use src/config.ts.
+
+Fail fast if env vars missing.
+
+Keep controllers thin.
+
+Acceptance:
+
+pnpm drizzle:migrate runs clean.
+
+pnpm seed:staging seeds one project, 3 stages, template with 5 required + 3 optional items.
+
+pnpm dev runs UI with live API.
+
+pnpm smoke passes all new checks.
+
+/projects/:id and /projects/:id/stages/:stageId functional with real DB data.

@@ -58,6 +58,7 @@ export class EpmService {
 
       createdStages.push({
         ...createdStage,
+        requiredApproverRole: createdStage.requiredApproverRole || undefined,
         gateRules: createdStage.gateRules as {
           requiredForms: string[];
           inventoryReservations: string[];
@@ -81,6 +82,7 @@ export class EpmService {
       
       stagesWithProgress.push({
         ...stage,
+        requiredApproverRole: stage.requiredApproverRole || undefined,
         gateRules: stage.gateRules as {
           requiredForms: string[];
           inventoryReservations: string[];
@@ -153,13 +155,17 @@ export class EpmService {
       };
 
       const item = await storage.createChecklistItem(itemData);
-      const checklistItem = {
+      const checklistItem: ChecklistItem = {
         ...item,
+        assigneeId: item.assigneeId || undefined,
+        dueAt: item.dueAt || undefined,
+        completedAt: item.completedAt || undefined,
         label: templateItem.text || templateItem.label || 'Checklist Item',
-        type: templateItem.type as any,
+        type: templateItem.type as 'text' | 'number' | 'photo' | 'signature' | 'boolean' | 'select',
         required: templateItem.required || false,
         validations: templateItem.validations || null,
-        assigneeName: null,
+        status: item.status as 'pending' | 'complete' | 'na' | 'blocked',
+        assigneeName: undefined,
       };
       console.log(`[EPM] Created checklist item:`, checklistItem);
       checklistItems.push(checklistItem);
@@ -182,6 +188,7 @@ export class EpmService {
 
     return {
       ...checklist,
+      stageId: checklist.stageId || undefined,
       status: checklist.status as 'not_started' | 'in_progress' | 'blocked' | 'done',
       templateName: template.name,
       items: checklistItems,
@@ -209,12 +216,15 @@ export class EpmService {
       const templateItem = templateItems.find(t => t.id === item.templateItemId);
       return {
         ...item,
+        assigneeId: item.assigneeId || undefined,
+        dueAt: item.dueAt || undefined,
+        completedAt: item.completedAt || undefined,
         status: item.status as 'pending' | 'complete' | 'na' | 'blocked',
         label: templateItem?.label || 'Unknown',
         type: (templateItem?.type as 'text' | 'number' | 'photo' | 'signature' | 'boolean' | 'select') || 'text',
         required: templateItem?.required || false,
         validations: templateItem?.validations || {},
-        assigneeName: null, // TODO: Fetch user name if assigneeId exists
+        assigneeName: undefined, // TODO: Fetch user name if assigneeId exists
       };
     });
 
@@ -224,6 +234,7 @@ export class EpmService {
 
     return {
       ...checklist,
+      stageId: checklist.stageId || undefined,
       status: checklist.status as 'not_started' | 'in_progress' | 'blocked' | 'done',
       templateName: template.name,
       items: enrichedItems,
@@ -240,8 +251,8 @@ export class EpmService {
 
     const before = { ...item };
     
-    // Prepare update data
-    const updateData: Partial<ChecklistItem> = {
+    // Prepare update data  
+    const updateData = {
       ...patch,
       dueAt: patch.dueAt ? new Date(patch.dueAt) : undefined,
       updatedAt: new Date(),
@@ -249,12 +260,12 @@ export class EpmService {
 
     // Set completedAt when status changes to complete
     if (patch.status === 'complete' && item.status !== 'complete') {
-      updateData.completedAt = new Date();
+      (updateData as any).completedAt = new Date();
     }
 
     // Clear completedAt if status changes away from complete
     if (patch.status && patch.status !== 'complete' && item.status === 'complete') {
-      updateData.completedAt = null;
+      (updateData as any).completedAt = undefined;
     }
 
     const updatedItem = await storage.updateChecklistItem(itemId, updateData);
@@ -281,12 +292,15 @@ export class EpmService {
     
     return {
       ...updatedItem,
+      assigneeId: updatedItem.assigneeId || undefined,
+      dueAt: updatedItem.dueAt || undefined,
+      completedAt: updatedItem.completedAt || undefined,
       status: updatedItem.status as 'pending' | 'complete' | 'na' | 'blocked',
       label: templateItem?.label || 'Unknown',
       type: (templateItem?.type as 'text' | 'number' | 'photo' | 'signature' | 'boolean' | 'select') || 'text',
       required: templateItem?.required || false,
       validations: templateItem?.validations || {},
-      assigneeName: null,
+      assigneeName: undefined,
     };
   }
 
