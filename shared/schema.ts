@@ -9,9 +9,15 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   role: text("role").notNull().default("worker"), // admin, supervisor, worker
-  name: text("name").notNull(),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
   email: text("email"),
+  phone: text("phone"),
+  position: text("position"),
+  department: text("department"), // operations, safety, maintenance, administration
   crew: text("crew"),
+  hireDate: timestamp("hire_date"),
+  emergencyContact: jsonb("emergency_contact"), // {name, relationship, phone}
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -20,11 +26,33 @@ export const users = pgTable("users", {
 export const certifications = pgTable("certifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull(),
-  type: text("type").notNull(), // respiratory_protection, confined_space, etc.
-  status: text("status").notNull(), // active, expired, pending
-  issuedDate: timestamp("issued_date"),
+  type: text("type").notNull(), // safety, technical, medical, regulatory
+  name: text("name").notNull(),
+  issuingOrganization: text("issuing_organization").notNull(),
+  certificateNumber: text("certificate_number"),
+  issueDate: timestamp("issue_date"),
   expirationDate: timestamp("expiration_date"),
-  details: jsonb("details"), // medical clearance info, fit test results, etc.
+  documentUrl: text("document_url"), // path to certificate file
+  renewalRequired: boolean("renewal_required").notNull().default(false),
+  status: text("status").notNull().default("active"), // active, expired, pending, suspended
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Medical Clearances and Health Monitoring
+export const medicalClearances = pgTable("medical_clearances", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  type: text("type").notNull(), // physical, respiratory, vision, hearing, psychological
+  description: text("description").notNull(),
+  provider: text("provider").notNull(),
+  testDate: timestamp("test_date").notNull(),
+  expirationDate: timestamp("expiration_date"),
+  result: text("result").notNull(), // cleared, restricted, not_cleared
+  restrictions: jsonb("restrictions"), // array of restriction strings
+  documentUrl: text("document_url"), // path to medical report
+  nextReminderDate: timestamp("next_reminder_date"),
+  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -200,10 +228,17 @@ export const checklistInstances = pgTable("checklist_instances", {
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
-  name: true,
+  firstName: true,
+  lastName: true,
   email: true,
+  phone: true,
+  position: true,
+  department: true,
   role: true,
   crew: true,
+  emergencyContact: true,
+}).extend({
+  hireDate: z.string().transform(val => new Date(val)).optional(),
 });
 
 export const insertProjectSchema = createInsertSchema(projects).pick({
@@ -295,11 +330,31 @@ export const insertPhotoSchema = createInsertSchema(photos).pick({
 export const insertCertificationSchema = createInsertSchema(certifications).pick({
   userId: true,
   type: true,
+  name: true,
+  issuingOrganization: true,
+  certificateNumber: true,
+  documentUrl: true,
+  renewalRequired: true,
   status: true,
-  details: true,
+  notes: true,
 }).extend({
-  issuedDate: z.string().transform(val => new Date(val)).optional(),
+  issueDate: z.string().transform(val => new Date(val)).optional(),
   expirationDate: z.string().transform(val => new Date(val)).optional(),
+});
+
+export const insertMedicalClearanceSchema = createInsertSchema(medicalClearances).pick({
+  userId: true,
+  type: true,
+  description: true,
+  provider: true,
+  result: true,
+  restrictions: true,
+  documentUrl: true,
+  notes: true,
+}).extend({
+  testDate: z.string().transform(val => new Date(val)),
+  expirationDate: z.string().transform(val => new Date(val)).optional(),
+  nextReminderDate: z.string().transform(val => new Date(val)).optional(),
 });
 
 export const insertChecklistTemplateSchema = createInsertSchema(checklistTemplates).pick({
@@ -350,6 +405,8 @@ export type Photo = typeof photos.$inferSelect;
 export type InsertPhoto = z.infer<typeof insertPhotoSchema>;
 export type Certification = typeof certifications.$inferSelect;
 export type InsertCertification = z.infer<typeof insertCertificationSchema>;
+export type MedicalClearance = typeof medicalClearances.$inferSelect;
+export type InsertMedicalClearance = z.infer<typeof insertMedicalClearanceSchema>;
 export type ChecklistTemplate = typeof checklistTemplates.$inferSelect;
 export type InsertChecklistTemplate = z.infer<typeof insertChecklistTemplateSchema>;
 export type ChecklistInstance = typeof checklistInstances.$inferSelect;

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -71,7 +72,88 @@ export default function Personnel() {
   const [selectedDepartment, setSelectedDepartment] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
 
-  // Mock personnel data - will be replaced with real API calls
+  // Fetch personnel data from API
+  const { data: personnelData, isLoading, error } = useQuery({
+    queryKey: ['/api/personnel'],
+    select: (data: any[]) => data.map((item: any) => ({
+      id: item.user.id,
+      firstName: item.user.firstName,
+      lastName: item.user.lastName,
+      email: item.user.email || "",
+      phone: item.user.phone || "",
+      position: item.user.position || "",
+      department: item.user.department || "operations",
+      hireDate: item.user.hireDate || new Date().toISOString(),
+      isActive: item.user.isActive,
+      emergencyContact: item.user.emergencyContact || {
+        name: "",
+        relationship: "",
+        phone: ""
+      },
+      certifications: item.certifications.map((cert: any) => ({
+        id: cert.id,
+        type: cert.type,
+        name: cert.name,
+        issuingOrganization: cert.issuingOrganization,
+        certificateNumber: cert.certificateNumber,
+        issueDate: cert.issueDate,
+        expirationDate: cert.expirationDate,
+        isExpired: cert.status === "expired" || (cert.expirationDate && new Date(cert.expirationDate) < new Date()),
+        isExpiringSoon: cert.expirationDate && 
+          new Date(cert.expirationDate) > new Date() && 
+          new Date(cert.expirationDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        renewalRequired: cert.renewalRequired
+      })),
+      medicalClearances: item.medicalClearances.map((clearance: any) => ({
+        id: clearance.id,
+        type: clearance.type,
+        description: clearance.description,
+        provider: clearance.provider,
+        testDate: clearance.testDate,
+        expirationDate: clearance.expirationDate,
+        result: clearance.result,
+        restrictions: clearance.restrictions || [],
+        isExpired: clearance.expirationDate && new Date(clearance.expirationDate) < new Date(),
+        isExpiringSoon: clearance.expirationDate && 
+          new Date(clearance.expirationDate) > new Date() && 
+          new Date(clearance.expirationDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      }))
+    }))
+  });
+
+  const personnel: PersonnelMember[] = personnelData || [];
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6" data-testid="personnel-page">
+        <div className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading personnel data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6" data-testid="personnel-page">
+        <Card className="border-destructive">
+          <CardContent className="p-6 text-center">
+            <AlertTriangle className="w-12 h-12 mx-auto text-destructive mb-4" />
+            <h3 className="text-lg font-medium mb-2">Error loading personnel data</h3>
+            <p className="text-muted-foreground">Unable to load personnel information. Please try again.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Remove mock data - using real API data above
+  /*
   const personnel: PersonnelMember[] = [
     {
       id: "emp-001",
@@ -238,6 +320,7 @@ export default function Personnel() {
       ]
     }
   ];
+  */
 
   const departments = [
     { id: "all", label: "All Departments" },

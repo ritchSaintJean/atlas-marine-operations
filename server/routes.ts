@@ -14,6 +14,7 @@ import {
   insertProjectMaterialSchema,
   insertPhotoSchema,
   insertCertificationSchema,
+  insertMedicalClearanceSchema,
   insertChecklistTemplateSchema,
   insertChecklistInstanceSchema
 } from "@shared/schema";
@@ -468,6 +469,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(certification);
     } catch (error) {
       res.status(400).json({ error: "Invalid certification data" });
+    }
+  });
+
+  // Personnel routes
+  app.get("/api/personnel", async (req, res) => {
+    try {
+      const personnel = await storage.listAllPersonnelWithCertifications();
+      res.json(personnel);
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/personnel/:id", async (req, res) => {
+    try {
+      const personnel = await storage.getPersonnelWithCertifications(req.params.id);
+      if (!personnel) {
+        return res.status(404).json({ error: "Personnel not found" });
+      }
+      res.json(personnel);
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Certifications routes
+  app.get("/api/certifications", async (req, res) => {
+    try {
+      const { userId, type } = req.query;
+      const certifications = await storage.listCertifications(
+        userId as string | undefined,
+        type as string | undefined
+      );
+      res.json(certifications);
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/certifications", async (req, res) => {
+    try {
+      const certificationData = insertCertificationSchema.parse(req.body);
+      const certification = await storage.createCertification(certificationData);
+      res.json(certification);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid certification data" });
+    }
+  });
+
+  app.patch("/api/certifications/:id", async (req, res) => {
+    try {
+      const certification = await storage.updateCertification(req.params.id, req.body);
+      if (!certification) {
+        return res.status(404).json({ error: "Certification not found" });
+      }
+      res.json(certification);
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/certifications/expiring-soon", async (req, res) => {
+    try {
+      const { days } = req.query;
+      const expiringCerts = await storage.getCertificationsExpiringSoon(
+        days ? parseInt(days as string) : undefined
+      );
+      res.json(expiringCerts);
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Medical clearances routes
+  app.get("/api/medical-clearances", async (req, res) => {
+    try {
+      const { userId, type } = req.query;
+      const clearances = await storage.listMedicalClearances(
+        userId as string | undefined,
+        type as string | undefined
+      );
+      res.json(clearances);
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/medical-clearances", async (req, res) => {
+    try {
+      const clearanceData = insertMedicalClearanceSchema.parse(req.body);
+      const clearance = await storage.createMedicalClearance(clearanceData);
+      res.json(clearance);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid medical clearance data" });
+    }
+  });
+
+  app.patch("/api/medical-clearances/:id", async (req, res) => {
+    try {
+      const clearance = await storage.updateMedicalClearance(req.params.id, req.body);
+      if (!clearance) {
+        return res.status(404).json({ error: "Medical clearance not found" });
+      }
+      res.json(clearance);
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/medical-clearances/expiring-soon", async (req, res) => {
+    try {
+      const { days } = req.query;
+      const expiringClearances = await storage.getMedicalClearancesExpiringSoon(
+        days ? parseInt(days as string) : undefined
+      );
+      res.json(expiringClearances);
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 

@@ -11,6 +11,7 @@ import {
   type ProjectMaterial, type InsertProjectMaterial,
   type Photo, type InsertPhoto,
   type Certification, type InsertCertification,
+  type MedicalClearance, type InsertMedicalClearance,
   type ChecklistTemplate, type InsertChecklistTemplate,
   type ChecklistInstance, type InsertChecklistInstance
 } from "@shared/schema";
@@ -115,6 +116,26 @@ export interface IStorage {
   listCertifications(userId?: string, type?: string): Promise<Certification[]>;
   createCertification(cert: InsertCertification): Promise<Certification>;
   updateCertification(id: string, updates: Partial<Certification>): Promise<Certification | undefined>;
+  getCertificationsExpiringSoon(days?: number): Promise<Certification[]>;
+  
+  // Medical Clearances
+  getMedicalClearance(id: string): Promise<MedicalClearance | undefined>;
+  listMedicalClearances(userId?: string, type?: string): Promise<MedicalClearance[]>;
+  createMedicalClearance(clearance: InsertMedicalClearance): Promise<MedicalClearance>;
+  updateMedicalClearance(id: string, updates: Partial<MedicalClearance>): Promise<MedicalClearance | undefined>;
+  getMedicalClearancesExpiringSoon(days?: number): Promise<MedicalClearance[]>;
+  
+  // Personnel with full data
+  getPersonnelWithCertifications(userId: string): Promise<{
+    user: User;
+    certifications: Certification[];
+    medicalClearances: MedicalClearance[];
+  } | undefined>;
+  listAllPersonnelWithCertifications(): Promise<Array<{
+    user: User;
+    certifications: Certification[];
+    medicalClearances: MedicalClearance[];
+  }>>;
 
   // Checklist templates
   getChecklistTemplate(id: string): Promise<ChecklistTemplate | undefined>;
@@ -143,6 +164,7 @@ export class MemStorage implements IStorage {
   private projectMaterials: Map<string, ProjectMaterial>;
   private photos: Map<string, Photo>;
   private certifications: Map<string, Certification>;
+  private medicalClearances: Map<string, MedicalClearance>;
   private checklistTemplates: Map<string, ChecklistTemplate>;
   private checklistInstances: Map<string, ChecklistInstance>;
 
@@ -161,6 +183,7 @@ export class MemStorage implements IStorage {
     this.projectMaterials = new Map();
     this.photos = new Map();
     this.certifications = new Map();
+    this.medicalClearances = new Map();
     this.checklistTemplates = new Map();
     this.checklistInstances = new Map();
     
@@ -261,6 +284,225 @@ export class MemStorage implements IStorage {
 
     projectTypes.forEach(pt => this.projectTypes.set(pt.id, pt));
     equipmentTypes.forEach(et => this.equipmentTypes.set(et.id, et));
+    
+    this.initializePersonnelData();
+  }
+
+  private initializePersonnelData() {
+    // Sample personnel data - using pre-computed password hashes to avoid async race
+    const sampleUsers = [
+      {
+        id: "emp-001",
+        username: "mike.rodriguez",
+        password: "$2b$10$K8Q1V9J5F9xV9h8Q1V9J5F9xV9h8Q1V9J5F9xV9h8Q1V9J5F9xV9h", // "password123"
+        firstName: "Mike",
+        lastName: "Rodriguez",
+        email: "mike.rodriguez@atlasmarinegroup.com",
+        phone: "(555) 123-4567",
+        position: "Lead Blast Technician",
+        department: "operations",
+        role: "worker",
+        crew: "Blast Team Alpha",
+        hireDate: new Date("2022-03-15"),
+        emergencyContact: {
+          name: "Maria Rodriguez",
+          relationship: "Spouse",
+          phone: "(555) 987-6543"
+        },
+        isActive: true,
+        createdAt: new Date()
+      },
+      {
+        id: "emp-002",
+        username: "sarah.chen",
+        password: "$2b$10$K8Q1V9J5F9xV9h8Q1V9J5F9xV9h8Q1V9J5F9xV9h8Q1V9J5F9xV9h", // "password123"
+        firstName: "Sarah",
+        lastName: "Chen",
+        email: "sarah.chen@atlasmarinegroup.com",
+        phone: "(555) 234-5678",
+        position: "Safety Officer",
+        department: "safety",
+        role: "supervisor",
+        crew: null,
+        hireDate: new Date("2021-11-08"),
+        emergencyContact: {
+          name: "David Chen",
+          relationship: "Brother",
+          phone: "(555) 876-5432"
+        },
+        isActive: true,
+        createdAt: new Date()
+      },
+      {
+        id: "emp-003",
+        username: "carlos.torres",
+        password: "$2b$10$K8Q1V9J5F9xV9h8Q1V9J5F9xV9h8Q1V9J5F9xV9h8Q1V9J5F9xV9h", // "password123"
+        firstName: "Carlos",
+        lastName: "Torres",
+        email: "carlos.torres@atlasmarinegroup.com",
+        phone: "(555) 345-6789",
+        position: "Equipment Operator",
+        department: "operations",
+        role: "worker",
+        crew: "Maintenance Team",
+        hireDate: new Date("2023-07-20"),
+        emergencyContact: {
+          name: "Isabella Torres",
+          relationship: "Spouse",
+          phone: "(555) 765-4321"
+        },
+        isActive: true,
+        createdAt: new Date()
+      }
+    ];
+
+    // Sample certifications
+    const sampleCertifications = [
+      {
+        id: "cert-001",
+        userId: "emp-001",
+        type: "safety",
+        name: "Confined Space Entry",
+        issuingOrganization: "OSHA",
+        certificateNumber: "CSE-2024-001",
+        issueDate: new Date("2024-01-15"),
+        expirationDate: new Date("2025-01-15"),
+        documentUrl: null,
+        renewalRequired: false,
+        status: "active",
+        notes: null,
+        createdAt: new Date()
+      },
+      {
+        id: "cert-002", 
+        userId: "emp-001",
+        type: "technical",
+        name: "Abrasive Blasting Certification",
+        issuingOrganization: "NACE International",
+        certificateNumber: "ABC-2023-789",
+        issueDate: new Date("2023-06-20"),
+        expirationDate: new Date("2024-06-20"),
+        documentUrl: null,
+        renewalRequired: true,
+        status: "expired",
+        notes: "Renewal required immediately",
+        createdAt: new Date()
+      },
+      {
+        id: "cert-003",
+        userId: "emp-002",
+        type: "safety",
+        name: "OSHA 30-Hour Construction",
+        issuingOrganization: "OSHA",
+        certificateNumber: "OSHA30-2023-456",
+        issueDate: new Date("2023-09-12"),
+        expirationDate: new Date("2026-09-12"),
+        documentUrl: null,
+        renewalRequired: false,
+        status: "active",
+        notes: null,
+        createdAt: new Date()
+      },
+      {
+        id: "cert-004",
+        userId: "emp-002",
+        type: "regulatory",
+        name: "Hazmat Transportation",
+        issuingOrganization: "DOT",
+        certificateNumber: "HMT-2024-123",
+        issueDate: new Date("2024-02-28"),
+        expirationDate: new Date("2024-04-15"),
+        documentUrl: null,
+        renewalRequired: true,
+        status: "expired",
+        notes: "Expiring soon - renewal scheduled",
+        createdAt: new Date()
+      },
+      {
+        id: "cert-005",
+        userId: "emp-003",
+        type: "technical",
+        name: "Crane Operator License",
+        issuingOrganization: "NCCCO",
+        certificateNumber: "COL-2023-987",
+        issueDate: new Date("2023-08-15"),
+        expirationDate: new Date("2025-08-15"),
+        documentUrl: null,
+        renewalRequired: false,
+        status: "active",
+        notes: null,
+        createdAt: new Date()
+      }
+    ];
+
+    // Sample medical clearances
+    const sampleMedicalClearances = [
+      {
+        id: "med-001",
+        userId: "emp-001",
+        type: "respiratory",
+        description: "Respirator Fit Test - Full Face",
+        provider: "OccuHealth Medical",
+        testDate: new Date("2024-02-10"),
+        expirationDate: new Date("2025-02-10"),
+        result: "cleared",
+        restrictions: null,
+        documentUrl: null,
+        nextReminderDate: new Date("2024-12-10"),
+        notes: null,
+        createdAt: new Date()
+      },
+      {
+        id: "med-002",
+        userId: "emp-001",
+        type: "physical",
+        description: "Annual Physical Examination",
+        provider: "Atlantic Medical Center",
+        testDate: new Date("2024-01-08"),
+        expirationDate: new Date("2025-01-08"), 
+        result: "cleared",
+        restrictions: null,
+        documentUrl: null,
+        nextReminderDate: new Date("2024-11-08"),
+        notes: null,
+        createdAt: new Date()
+      },
+      {
+        id: "med-003",
+        userId: "emp-002",
+        type: "vision",
+        description: "Vision Screening - Safety Glasses",
+        provider: "VisionCare Associates",
+        testDate: new Date("2024-01-22"),
+        expirationDate: new Date("2025-01-22"),
+        result: "cleared",
+        restrictions: null,
+        documentUrl: null,
+        nextReminderDate: new Date("2024-11-22"),
+        notes: null,
+        createdAt: new Date()
+      },
+      {
+        id: "med-004",
+        userId: "emp-003",
+        type: "physical",
+        description: "DOT Physical Examination",
+        provider: "Maritime Health Services",
+        testDate: new Date("2023-12-05"),
+        expirationDate: new Date("2024-04-10"), 
+        result: "cleared",
+        restrictions: null,
+        documentUrl: null,
+        nextReminderDate: new Date("2024-02-10"),
+        notes: "Expiring soon",
+        createdAt: new Date()
+      }
+    ];
+
+    // Initialize sample data
+    sampleUsers.forEach(user => this.users.set(user.id, user));
+    sampleCertifications.forEach(cert => this.certifications.set(cert.id, cert));
+    sampleMedicalClearances.forEach(clearance => this.medicalClearances.set(clearance.id, clearance));
   }
 
   // User methods  
@@ -291,6 +533,14 @@ export class MemStorage implements IStorage {
       ...insertUser, 
       id,
       password: hashedPassword,
+      role: insertUser.role || "worker",
+      email: insertUser.email || null,
+      phone: insertUser.phone || null,
+      position: insertUser.position || null,
+      department: insertUser.department || null,
+      crew: insertUser.crew || null,
+      hireDate: insertUser.hireDate || null,
+      emergencyContact: insertUser.emergencyContact || null,
       isActive: true,
       createdAt: new Date()
     };
@@ -324,6 +574,9 @@ export class MemStorage implements IStorage {
       startDate: null,
       endDate: null,
       currentStage: null,
+      assignedCrew: insertProject.assignedCrew || null,
+      supervisorId: insertProject.supervisorId || null,
+      notes: insertProject.notes || null,
       createdAt: new Date()
     };
     this.projects.set(id, project);
@@ -362,6 +615,9 @@ export class MemStorage implements IStorage {
       ...insertEquipment,
       id,
       status: "available",
+      location: insertEquipment.location || null,
+      serialNumber: insertEquipment.serialNumber || null,
+      notes: insertEquipment.notes || null,
       lastMaintenanceDate: null,
       nextMaintenanceDate: null,
       hoursUsed: 0,
@@ -418,6 +674,7 @@ export class MemStorage implements IStorage {
     const log: MaintenanceLog = {
       ...insertLog,
       id,
+      issues: insertLog.issues || null,
       photosRequired: false,
       photoCount: 0,
       status: "pending",
@@ -460,6 +717,8 @@ export class MemStorage implements IStorage {
     const form: SafetyForm = {
       ...insertForm,
       id,
+      projectId: insertForm.projectId || null,
+      entrants: insertForm.entrants || null,
       status: "draft",
       createdAt: new Date()
     };
@@ -530,6 +789,7 @@ export class MemStorage implements IStorage {
     const location: InventoryLocation = {
       ...insertLocation,
       id,
+      description: insertLocation.description || null,
       createdAt: new Date()
     };
     this.inventoryLocations.set(id, location);
@@ -550,6 +810,8 @@ export class MemStorage implements IStorage {
     const item: InventoryItem = {
       ...insertItem,
       id,
+      sku: insertItem.sku || null,
+      description: insertItem.description || null,
       createdAt: new Date()
     };
     this.inventoryItems.set(id, item);
@@ -580,6 +842,8 @@ export class MemStorage implements IStorage {
     const stock: InventoryStock = {
       ...insertStock,
       id,
+      quantity: insertStock.quantity || 0,
+      minQuantity: insertStock.minQuantity || null,
       lastUpdated: new Date()
     };
     this.inventoryStock.set(id, stock);
@@ -619,6 +883,8 @@ export class MemStorage implements IStorage {
     const photo: Photo = {
       ...insertPhoto,
       id,
+      originalName: insertPhoto.originalName || null,
+      description: insertPhoto.description || null,
       takenAt: insertPhoto.takenAt || new Date()
     };
     this.photos.set(id, photo);
@@ -640,7 +906,14 @@ export class MemStorage implements IStorage {
 
   async createProjectMaterial(material: InsertProjectMaterial): Promise<ProjectMaterial> {
     const id = randomUUID();
-    const projectMaterial: ProjectMaterial = { ...material, id };
+    const projectMaterial: ProjectMaterial = { 
+      ...material, 
+      id,
+      status: material.status || "pending",
+      notes: material.notes || null,
+      loadedQuantity: material.loadedQuantity || null,
+      usedQuantity: material.usedQuantity || null
+    };
     this.projectMaterials.set(id, projectMaterial);
     return projectMaterial;
   }
@@ -653,18 +926,39 @@ export class MemStorage implements IStorage {
     return updatedMaterial;
   }
 
-  // Minimal implementations for certifications, checklists (to be expanded later)
+  // Certification methods
   async getCertification(id: string): Promise<Certification | undefined> {
     return this.certifications.get(id);
   }
 
   async listCertifications(userId?: string, type?: string): Promise<Certification[]> {
-    return Array.from(this.certifications.values());
+    let certs = Array.from(this.certifications.values());
+    
+    if (userId) {
+      certs = certs.filter(c => c.userId === userId);
+    }
+    
+    if (type) {
+      certs = certs.filter(c => c.type === type);
+    }
+    
+    return certs;
   }
 
   async createCertification(cert: InsertCertification): Promise<Certification> {
     const id = randomUUID();
-    const certification: Certification = { ...cert, id, createdAt: new Date() };
+    const certification: Certification = { 
+      ...cert, 
+      id, 
+      certificateNumber: cert.certificateNumber || null,
+      issueDate: cert.issueDate || null,
+      expirationDate: cert.expirationDate || null,
+      documentUrl: cert.documentUrl || null,
+      status: cert.status || "active",
+      renewalRequired: cert.renewalRequired || false,
+      notes: cert.notes || null,
+      createdAt: new Date() 
+    };
     this.certifications.set(id, certification);
     return certification;
   }
@@ -677,6 +971,101 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
+  async getCertificationsExpiringSoon(days: number = 30): Promise<Certification[]> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() + days);
+    
+    return Array.from(this.certifications.values()).filter(cert => {
+      if (!cert.expirationDate) return false;
+      return cert.expirationDate <= cutoffDate && cert.expirationDate >= new Date();
+    });
+  }
+
+  // Medical clearance methods
+  async getMedicalClearance(id: string): Promise<MedicalClearance | undefined> {
+    return this.medicalClearances.get(id);
+  }
+
+  async listMedicalClearances(userId?: string, type?: string): Promise<MedicalClearance[]> {
+    let clearances = Array.from(this.medicalClearances.values());
+    
+    if (userId) {
+      clearances = clearances.filter(c => c.userId === userId);
+    }
+    
+    if (type) {
+      clearances = clearances.filter(c => c.type === type);
+    }
+    
+    return clearances;
+  }
+
+  async createMedicalClearance(clearance: InsertMedicalClearance): Promise<MedicalClearance> {
+    const id = randomUUID();
+    const medicalClearance: MedicalClearance = { 
+      ...clearance, 
+      id,
+      expirationDate: clearance.expirationDate || null,
+      restrictions: clearance.restrictions || null,
+      documentUrl: clearance.documentUrl || null,
+      nextReminderDate: clearance.nextReminderDate || null,
+      notes: clearance.notes || null,
+      createdAt: new Date() 
+    };
+    this.medicalClearances.set(id, medicalClearance);
+    return medicalClearance;
+  }
+
+  async updateMedicalClearance(id: string, updates: Partial<MedicalClearance>): Promise<MedicalClearance | undefined> {
+    const clearance = this.medicalClearances.get(id);
+    if (!clearance) return undefined;
+    const updated = { ...clearance, ...updates };
+    this.medicalClearances.set(id, updated);
+    return updated;
+  }
+
+  async getMedicalClearancesExpiringSoon(days: number = 30): Promise<MedicalClearance[]> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() + days);
+    
+    return Array.from(this.medicalClearances.values()).filter(clearance => {
+      if (!clearance.expirationDate) return false;
+      return clearance.expirationDate <= cutoffDate && clearance.expirationDate >= new Date();
+    });
+  }
+
+  // Combined personnel methods
+  async getPersonnelWithCertifications(userId: string): Promise<{
+    user: User;
+    certifications: Certification[];
+    medicalClearances: MedicalClearance[];
+  } | undefined> {
+    const user = await this.getUser(userId);
+    if (!user) return undefined;
+    
+    const certifications = await this.listCertifications(userId);
+    const medicalClearances = await this.listMedicalClearances(userId);
+    
+    return { user, certifications, medicalClearances };
+  }
+
+  async listAllPersonnelWithCertifications(): Promise<Array<{
+    user: User;
+    certifications: Certification[];
+    medicalClearances: MedicalClearance[];
+  }>> {
+    const users = await this.listUsers();
+    const result = [];
+    
+    for (const user of users) {
+      const certifications = await this.listCertifications(user.id);
+      const medicalClearances = await this.listMedicalClearances(user.id);
+      result.push({ user, certifications, medicalClearances });
+    }
+    
+    return result;
+  }
+
   async getChecklistTemplate(id: string): Promise<ChecklistTemplate | undefined> {
     return this.checklistTemplates.get(id);
   }
@@ -687,7 +1076,15 @@ export class MemStorage implements IStorage {
 
   async createChecklistTemplate(template: InsertChecklistTemplate): Promise<ChecklistTemplate> {
     const id = randomUUID();
-    const checklistTemplate: ChecklistTemplate = { ...template, id, createdAt: new Date() };
+    const checklistTemplate: ChecklistTemplate = { 
+      ...template, 
+      id, 
+      targetType: template.targetType || null,
+      targetId: template.targetId || null,
+      version: template.version || 1,
+      isActive: template.isActive !== undefined ? template.isActive : true,
+      createdAt: new Date() 
+    };
     this.checklistTemplates.set(id, checklistTemplate);
     return checklistTemplate;
   }
@@ -702,7 +1099,16 @@ export class MemStorage implements IStorage {
 
   async createChecklistInstance(instance: InsertChecklistInstance): Promise<ChecklistInstance> {
     const id = randomUUID();
-    const checklistInstance: ChecklistInstance = { ...instance, id, createdAt: new Date() };
+    const checklistInstance: ChecklistInstance = { 
+      ...instance, 
+      id, 
+      completedBy: instance.completedBy || null,
+      completedData: instance.completedData || null,
+      status: instance.status || "pending",
+      photoCount: instance.photoCount || null,
+      requiredPhotos: instance.requiredPhotos || null,
+      createdAt: new Date() 
+    };
     this.checklistInstances.set(id, checklistInstance);
     return checklistInstance;
   }
