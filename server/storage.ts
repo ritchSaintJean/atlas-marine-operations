@@ -54,6 +54,8 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  createUserWithHashedPassword(user: InsertUser): Promise<User>;
+  getUserWithPasswordForAuth(username: string): Promise<(User & {password: string}) | undefined>;
   listUsers(): Promise<User[]>;
 
   // Project management
@@ -900,8 +902,46 @@ export class MemStorage implements IStorage {
     return userWithoutPassword as User;
   }
 
+  async createUserWithHashedPassword(insertUser: InsertUser): Promise<User> {
+    const id = randomUUID();
+    const user: User = { 
+      ...insertUser, 
+      id,
+      // Password already hashed, don't hash again
+      password: insertUser.password,
+      role: insertUser.role || "worker",
+      email: insertUser.email || null,
+      phone: insertUser.phone || null,
+      position: insertUser.position || null,
+      department: insertUser.department || null,
+      crew: insertUser.crew || null,
+      hireDate: insertUser.hireDate || null,
+      emergencyContact: insertUser.emergencyContact || null,
+      isActive: true,
+      createdAt: new Date()
+    };
+    this.users.set(id, user);
+    
+    // Return user without password for security
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword as User;
+  }
+
+  async getUserWithPasswordForAuth(username: string): Promise<(User & {password: string}) | undefined> {
+    const user = Array.from(this.users.values()).find(
+      (user) => user.username === username && user.isActive
+    );
+    if (!user) return undefined;
+    
+    // Return full user with password for authentication
+    return user as (User & {password: string});
+  }
+
   async listUsers(): Promise<User[]> {
-    return Array.from(this.users.values());
+    return Array.from(this.users.values()).map(user => {
+      const { password, ...userWithoutPassword } = user;
+      return userWithoutPassword as User;
+    });
   }
 
   // Project methods

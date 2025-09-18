@@ -1,4 +1,4 @@
-import { storage } from '../../storage';
+import { IStorage } from '../../storage';
 import { 
   StageCreate, 
   ChecklistFromTemplate, 
@@ -23,9 +23,11 @@ import {
 import { randomUUID } from 'crypto';
 
 export class EpmService {
+  constructor(private storage: IStorage) {}
+
   async createStages(projectId: string, stages: StageCreate[]): Promise<Stage[]> {
     // Validate project exists
-    const project = await storage.getProject(projectId);
+    const project = await this.storage.getProject(projectId);
     if (!project) {
       throw new Error('Project not found');
     }
@@ -44,7 +46,7 @@ export class EpmService {
         updatedAt: new Date(),
       };
 
-      const createdStage = await storage.createProjectStage(stageData);
+      const createdStage = await this.storage.createProjectStage(stageData);
       
       // Log stage creation
       await this.createAuditLog({
@@ -73,7 +75,7 @@ export class EpmService {
   }
 
   async listStagesWithPct(projectId: string): Promise<Stage[]> {
-    const stages = await storage.listProjectStages(projectId);
+    const stages = await this.storage.listProjectStages(projectId);
     const stagesWithProgress: Stage[] = [];
 
     for (const stage of stages) {
@@ -102,12 +104,12 @@ export class EpmService {
     stageId?: string
   ): Promise<Checklist> {
     // Validate inputs
-    const project = await storage.getProject(projectId);
+    const project = await this.storage.getProject(projectId);
     if (!project) {
       throw new Error('Project not found');
     }
 
-    const template = await storage.getChecklistTemplate(templateId);
+    const template = await this.storage.getChecklistTemplate(templateId);
     if (!template) {
       throw new Error('Checklist template not found');
     }
@@ -115,7 +117,7 @@ export class EpmService {
     // Template found and validated
 
     if (stageId) {
-      const stage = await storage.getProjectStage(stageId);
+      const stage = await this.storage.getProjectStage(stageId);
       if (!stage || stage.projectId !== projectId) {
         throw new Error('Stage not found or does not belong to project');
       }
@@ -132,7 +134,7 @@ export class EpmService {
       updatedAt: new Date(),
     };
 
-    const checklist = await storage.createProjectChecklist(checklistData);
+    const checklist = await this.storage.createProjectChecklist(checklistData);
 
     // Create checklist items from template
     // Use template.items (JSON field) instead of separate checklist_template_items table
@@ -153,7 +155,7 @@ export class EpmService {
         updatedAt: new Date(),
       };
 
-      const item = await storage.createChecklistItem(itemData);
+      const item = await this.storage.createChecklistItem(itemData);
       const checklistItem: ChecklistItem = {
         ...item,
         assigneeId: item.assigneeId || undefined,
@@ -194,17 +196,17 @@ export class EpmService {
   }
 
   async getChecklist(checklistId: string): Promise<Checklist> {
-    const checklist = await storage.getProjectChecklist(checklistId);
+    const checklist = await this.storage.getProjectChecklist(checklistId);
     if (!checklist) {
       throw new Error('Checklist not found');
     }
 
-    const template = await storage.getChecklistTemplate(checklist.templateId);
+    const template = await this.storage.getChecklistTemplate(checklist.templateId);
     if (!template) {
       throw new Error('Template not found');
     }
 
-    const items = await storage.listChecklistItems(checklistId);
+    const items = await this.storage.listChecklistItems(checklistId);
     const templateItems = (template.items as any[]) || [];
 
     // Join with template data to get labels, types, etc.
@@ -240,7 +242,7 @@ export class EpmService {
   }
 
   async updateChecklistItem(itemId: string, patch: ChecklistItemPatch): Promise<ChecklistItem> {
-    const item = await storage.getChecklistItem(itemId);
+    const item = await this.storage.getChecklistItem(itemId);
     if (!item) {
       throw new Error('Checklist item not found');
     }
@@ -264,7 +266,7 @@ export class EpmService {
       (updateData as any).completedAt = undefined;
     }
 
-    const updatedItem = await storage.updateChecklistItem(itemId, updateData);
+    const updatedItem = await this.storage.updateChecklistItem(itemId, updateData);
     
     if (!updatedItem) {
       throw new Error('Failed to update checklist item');
@@ -284,8 +286,8 @@ export class EpmService {
     await this.updateChecklistStatus(updatedItem.projectChecklistId);
 
     // Get template info for response
-    const checklist = await storage.getProjectChecklist(updatedItem.projectChecklistId);
-    const template = checklist ? await storage.getChecklistTemplate(checklist.templateId) : null;
+    const checklist = await this.storage.getProjectChecklist(updatedItem.projectChecklistId);
+    const template = checklist ? await this.storage.getChecklistTemplate(checklist.templateId) : null;
     const templateItems = (template?.items as any[]) || [];
     const templateItem = templateItems.find(t => t.id === updatedItem.templateItemId);
     
@@ -310,7 +312,7 @@ export class EpmService {
     approverId: string
   ): Promise<void> {
     // Validate stage exists
-    const stage = await storage.getProjectStage(stageId);
+    const stage = await this.storage.getProjectStage(stageId);
     if (!stage || stage.projectId !== projectId) {
       throw new Error('Stage not found or does not belong to project');
     }
@@ -335,7 +337,7 @@ export class EpmService {
       createdAt: new Date(),
     };
 
-    const approval = await storage.createStageApproval(approvalData);
+    const approval = await this.storage.createStageApproval(approvalData);
 
     // Log approval
     await this.createAuditLog({
@@ -388,7 +390,7 @@ export class EpmService {
 
   // Private helper methods
   private async calculateStageCompletion(stageId: string): Promise<number> {
-    const checklists = await storage.listProjectChecklistsByStage(stageId);
+    const checklists = await this.storage.listProjectChecklistsByStage(stageId);
     
     if (checklists.length === 0) return 0;
 
@@ -396,8 +398,8 @@ export class EpmService {
     let completedRequiredItems = 0;
 
     for (const checklist of checklists) {
-      const items = await storage.listChecklistItems(checklist.id);
-      const template = await storage.getChecklistTemplate(checklist.templateId);
+      const items = await this.storage.listChecklistItems(checklist.id);
+      const template = await this.storage.getChecklistTemplate(checklist.templateId);
       const templateItems = (template?.items as any[]) || [];
       
       for (const item of items) {
@@ -418,7 +420,7 @@ export class EpmService {
     projectId: string, 
     stageId: string
   ): Promise<'pending' | 'approved' | 'rejected' | undefined> {
-    const approvals = await storage.listStageApprovals(projectId, stageId);
+    const approvals = await this.storage.listStageApprovals(projectId, stageId);
     const latestApproval = approvals.sort((a, b) => 
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )[0];
@@ -442,11 +444,11 @@ export class EpmService {
   }
 
   private async updateChecklistStatus(checklistId: string): Promise<void> {
-    const checklist = await storage.getProjectChecklist(checklistId);
+    const checklist = await this.storage.getProjectChecklist(checklistId);
     if (!checklist) return;
 
-    const items = await storage.listChecklistItems(checklistId);
-    const templateItems = await storage.listChecklistTemplateItems(checklist.templateId);
+    const items = await this.storage.listChecklistItems(checklistId);
+    const templateItems = await this.storage.listChecklistTemplateItems(checklist.templateId);
 
     let totalItems = 0;
     let completedItems = 0;
@@ -471,29 +473,45 @@ export class EpmService {
       status = 'in_progress';
     }
 
-    await storage.updateProjectChecklist(checklistId, { status, updatedAt: new Date() });
+    await this.storage.updateProjectChecklist(checklistId, { status, updatedAt: new Date() });
   }
 
   private async onStageApproved(projectId: string, stage: ProjectStage): Promise<void> {
     const gateRules = stage.gateRules as any;
     
-    // Generate required safety forms
-    if (gateRules?.requiredForms?.length > 0) {
-      for (const formType of gateRules.requiredForms) {
-        await this.generateSafetyForm(projectId, stage.id, formType);
+    try {
+      // 1. Generate required safety forms from gate_rules.requiredForms[]
+      if (gateRules?.requiredForms?.length > 0) {
+        console.log(`Generating safety forms for stage ${stage.name}: ${gateRules.requiredForms.join(', ')}`);
+        for (const formType of gateRules.requiredForms) {
+          await this.generateSafetyForm(projectId, stage.id, formType);
+        }
       }
-    }
 
-    // Reserve inventory items
-    if (gateRules?.inventoryReservations?.length > 0) {
-      for (const itemId of gateRules.inventoryReservations) {
-        await this.reserveInventoryItem(projectId, itemId);
+      // 2. Reserve inventory for the stage (using existing inventory service)
+      await this.reserveStageInventory(projectId, stage.id);
+
+      // 3. If stage name includes "commissioning", seed equipment maintenance jobs
+      if (stage.name.toLowerCase().includes('commissioning')) {
+        console.log(`Seeding equipment maintenance jobs for commissioning stage: ${stage.name}`);
+        await this.seedEquipmentMaintenanceJobs(projectId, stage.id);
       }
-    }
 
-    // Seed equipment commissioning jobs
-    if (gateRules?.equipmentCommissioning) {
-      await this.seedEquipmentCommissioningJobs(projectId, stage.id);
+      // 4. Publish idempotent notifications
+      await this.publishStageApprovedNotifications(projectId, stage);
+
+    } catch (error) {
+      console.error(`Error in stage approval hooks for stage ${stage.id}:`, error);
+      // Don't re-throw to prevent breaking the approval process
+      // Log the error and continue
+      await this.createAuditLog({
+        actorId: 'system',
+        entity: 'stage_approval_hooks',
+        entityId: stage.id,
+        action: 'error',
+        before: null,
+        after: { error: error instanceof Error ? error.message : 'Unknown error' },
+      });
     }
   }
 
@@ -504,11 +522,11 @@ export class EpmService {
     approverId: string
   ): Promise<void> {
     // Use existing notification system
-    const project = await storage.getProject(projectId);
-    const approver = await storage.getUser(approverId);
+    const project = await this.storage.getProject(projectId);
+    const approver = await this.storage.getUser(approverId);
     
     if (project && approver) {
-      await storage.createNotification({
+      await this.storage.createNotification({
         recipientId: project.supervisorId || 'admin',
         type: 'stage_approval',
         title: `Stage ${decision.status === 'approved' ? 'Approved' : 'Rejected'}`,
@@ -528,22 +546,144 @@ export class EpmService {
   }
 
   private async createAuditLog(data: InsertAuditLog): Promise<void> {
-    await storage.createAuditLog(data);
+    await this.storage.createAuditLog(data);
   }
 
-  // Placeholder methods for future implementation
+  // Approve hook implementations
   private async generateSafetyForm(projectId: string, stageId: string, formType: string): Promise<void> {
-    // TODO: Integrate with existing safety form system
-    console.log(`Generating safety form ${formType} for project ${projectId}, stage ${stageId}`);
+    try {
+      // Generate safety form using existing safety form system
+      const project = await this.storage.getProject(projectId);
+      if (!project) return;
+
+      await this.storage.createSafetyForm({
+        projectId,
+        relatedId: stageId,
+        relatedType: 'stage',
+        type: formType,
+        title: `${formType} - ${project.name}`,
+        submittedById: 'system', // Generated automatically
+        formData: { 
+          stageId,
+          generatedByApproval: true,
+          formType 
+        },
+        reviewedById: null,
+        reviewedAt: null,
+        notes: `Auto-generated form for stage approval`
+      });
+      
+      console.log(`✅ Generated safety form ${formType} for project ${projectId}, stage ${stageId}`);
+    } catch (error) {
+      console.error(`❌ Failed to generate safety form ${formType}:`, error);
+    }
   }
 
-  private async reserveInventoryItem(projectId: string, itemId: string): Promise<void> {
-    // TODO: Integrate with existing inventory system
-    console.log(`Reserving inventory item ${itemId} for project ${projectId}`);
+  private async reserveStageInventory(projectId: string, stageId: string): Promise<void> {
+    try {
+      // Get all project materials for this stage that need reservation
+      const projectMaterials = await this.storage.listProjectMaterials(projectId);
+      const stageMaterials = projectMaterials.filter(material => 
+        material.stageId === stageId && material.status === 'needed'
+      );
+      
+      for (const material of stageMaterials) {
+        // Reserve the required quantity
+        const reservationId = randomUUID();
+        await this.storage.createInventoryStock({
+          itemId: material.itemId,
+          locationId: 'stage-reservation', // Special location for stage reservations
+          quantity: -material.quantityRequired, // Negative to indicate reservation
+          unitCost: material.unitCost || 0,
+          notes: `Reserved for stage ${stageId} - ${material.notes || ''}`,
+          reservationId,
+          createdAt: new Date(),
+        });
+        
+        // Update material status
+        await this.storage.updateProjectMaterial(material.id, {
+          status: 'reserved',
+          updatedAt: new Date()
+        });
+      }
+      
+      console.log(`✅ Reserved inventory for stage ${stageId}: ${stageMaterials.length} items`);
+    } catch (error) {
+      console.error(`❌ Failed to reserve inventory for stage ${stageId}:`, error);
+    }
   }
 
-  private async seedEquipmentCommissioningJobs(projectId: string, stageId: string): Promise<void> {
-    // TODO: Integrate with existing equipment maintenance system
-    console.log(`Seeding equipment commissioning jobs for project ${projectId}, stage ${stageId}`);
+  private async seedEquipmentMaintenanceJobs(projectId: string, stageId: string): Promise<void> {
+    try {
+      // Get all project equipment that needs commissioning
+      const equipmentAssignments = await this.storage.listEquipmentAssignments(projectId);
+      
+      for (const assignment of equipmentAssignments) {
+        // Create commissioning maintenance job
+        await this.storage.createMaintenanceLog({
+          equipmentId: assignment.equipmentId,
+          projectId,
+          type: 'commissioning',
+          description: `Commissioning maintenance for stage: ${stageId}`,
+          scheduledDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+          performedById: null,
+          performedAt: null,
+          notes: `Auto-generated commissioning job for stage approval`,
+          cost: null,
+          partsUsed: null,
+          createdAt: new Date(),
+        });
+      }
+      
+      console.log(`✅ Seeded equipment maintenance jobs for commissioning stage ${stageId}: ${equipmentAssignments.length} jobs`);
+    } catch (error) {
+      console.error(`❌ Failed to seed equipment maintenance jobs for stage ${stageId}:`, error);
+    }
+  }
+
+  private async publishStageApprovedNotifications(projectId: string, stage: ProjectStage): Promise<void> {
+    try {
+      const dedupeKey = `stage.approved.${stage.id}`;
+      
+      // Check if notification already exists (idempotent)
+      const existingNotifications = await this.storage.listNotifications();
+      const existing = existingNotifications.find(n => 
+        n.metadata && 
+        typeof n.metadata === 'object' && 
+        'dedupeKey' in n.metadata && 
+        n.metadata.dedupeKey === dedupeKey
+      );
+      
+      if (existing) {
+        console.log(`Notification already exists for stage ${stage.id}, skipping`);
+        return;
+      }
+      
+      const project = await this.storage.getProject(projectId);
+      if (!project) return;
+      
+      // Create idempotent stage.approved notification
+      await this.storage.createNotification({
+        recipientId: project.supervisorId || 'admin',
+        type: 'stage_approved',
+        title: `Stage Approved: ${stage.name}`,
+        message: `Stage "${stage.name}" in project "${project.name}" has been approved and automated workflows have been triggered.`,
+        relatedType: 'project',
+        relatedId: projectId,
+        priority: 'high',
+        actionUrl: `/projects/${projectId}/stages/${stage.id}`,
+        metadata: { 
+          stageId: stage.id,
+          stageName: stage.name,
+          dedupeKey, // Ensures idempotency
+          automatedWorkflows: true,
+          timestamp: new Date().toISOString()
+        }
+      });
+      
+      console.log(`✅ Published stage.approved notification for stage ${stage.id}`);
+    } catch (error) {
+      console.error(`❌ Failed to publish stage approved notifications for stage ${stage.id}:`, error);
+    }
   }
 }

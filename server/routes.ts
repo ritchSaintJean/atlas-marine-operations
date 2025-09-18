@@ -25,6 +25,8 @@ import {
 } from "@shared/schema";
 
 import { registerEpmRoutes } from "./routes/epm.routes";
+import { authRoutes } from "./routes/auth.routes";
+import { upload, handleUploadError } from "./middleware/upload";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -40,17 +42,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/readyz", async (req, res) => {
     try {
+      // Check required environment variables - skip DATABASE_URL for MemStorage
+      const requiredEnvs = ['SESSION_SECRET'];
+      // Only require DATABASE_URL if we're actually using a database
+      if (process.env.NODE_ENV === 'production') {
+        requiredEnvs.push('DATABASE_URL');
+      }
+      
+      const missingEnvs = requiredEnvs.filter(env => !process.env[env]);
+      
+      if (missingEnvs.length > 0) {
+        return res.status(503).json({
+          status: "not ready",
+          environment: "error",
+          error: `Missing required environment variables: ${missingEnvs.join(', ')}`,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
       // Test database connectivity by trying to list users
       await storage.listUsers();
       res.json({
         status: "ready",
         database: "ok",
+        environment: "ok",
         timestamp: new Date().toISOString()
       });
     } catch (error) {
       res.status(503).json({
         status: "not ready",
         database: "error",
+        environment: "ok",
         error: error instanceof Error ? error.message : "Unknown error",
         timestamp: new Date().toISOString()
       });
@@ -475,9 +497,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/photos", async (req, res) => {
+  app.post("/api/photos", upload.single('photo'), handleUploadError, async (req, res) => {
     try {
-      const photoData = insertPhotoSchema.parse(req.body);
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      // Validate file size again (redundant check for security)
+      if (req.file.size > 10 * 1024 * 1024) {
+        return res.status(400).json({ error: "File size exceeds 10MB limit" });
+      }
+
+      const photoData = insertPhotoSchema.parse({
+        ...req.body,
+        filename: req.file.originalname,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+        data: req.file.buffer // Store file data in database for now
+      });
+      
       const photo = await storage.createPhoto(photoData);
       res.json(photo);
     } catch (error) {
@@ -809,6 +847,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({ error: "Invalid checklist instance data" });
     }
   });
+
+  // Register Auth routes
+  app.use('/api/auth', authRoutes);
 
   // Register EPM routes
   registerEpmRoutes(app);

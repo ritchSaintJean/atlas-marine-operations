@@ -1,11 +1,107 @@
 import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
+import helmet from "helmet";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { storage } from "./storage";
+import { loadUser } from "./middleware/auth";
+import { csrfProtection, getCsrfToken } from "./middleware/csrf";
+
+// Import session stores
+import connectPgSimple from 'connect-pg-simple';
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+
+// Security hardening
+const isProduction = process.env.NODE_ENV === 'production';
+app.use(helmet({
+  contentSecurityPolicy: isProduction ? {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+    }
+  } : {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Required for Vite dev
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "ws:", "wss:"], // Required for Vite HMR
+    }
+  },
+  crossOriginEmbedderPolicy: false // Required for Vite dev
+}));
+
+app.use(cors({
+  origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:5000'],
+  credentials: true
+}));
+
+// Rate limiting
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 60, // limit each IP to 60 requests per windowMs
+  message: { error: 'Too many requests from this IP, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30, // limit each IP to 30 uploads per windowMs
+  message: { error: 'Too many upload requests from this IP, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply rate limiting to auth and upload routes
+app.use('/api/auth', authLimiter);
+app.use('/api/upload', uploadLimiter);
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: false, limit: '10mb' }));
+
+// Session configuration
+declare module 'express-session' {
+  interface SessionData {
+    userId?: string;
+    role?: string;
+  }
+}
+
+// Session configuration with production-ready store
+const sessionConfig: session.SessionOptions = {
+  secret: process.env.SESSION_SECRET || 'dev-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: isProduction,
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: isProduction ? 'strict' : 'lax',
+  },
+  // Use postgres session store in production if DATABASE_URL is available
+  ...(isProduction && process.env.DATABASE_URL ? {
+    store: new (connectPgSimple(session))({
+      conString: process.env.DATABASE_URL,
+      tableName: 'user_sessions',
+      createTableIfMissing: true,
+    })
+  } : {})
+};
+
+app.use(session(sessionConfig));
+
+// Load user from session
+app.use(loadUser);
+
+// CSRF token endpoint (must come before CSRF protection and route registration)
+app.get('/api/csrf-token', getCsrfToken);
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -39,6 +135,11 @@ app.use((req, res, next) => {
 
 // Startup seeding function for demo data (idempotent)
 async function seedOnStartup() {
+  // Prevent seeds in production
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Seeding is not allowed in production environment');
+  }
+  
   if (process.env.EPM_SEED_ON_START !== 'true' && process.env.NODE_ENV !== 'development') {
     return;
   }
@@ -228,6 +329,9 @@ async function seedOnStartup() {
 }
 
 (async () => {
+  // Apply CSRF protection to state-changing requests (after CSRF endpoint, before routes)
+  app.use('/api', csrfProtection);
+  
   const server = await registerRoutes(app);
 
   // Seed demo data if requested

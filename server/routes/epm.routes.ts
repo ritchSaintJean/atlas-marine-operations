@@ -8,8 +8,9 @@ import {
   stageApproveSchema
 } from "../../shared/contracts/epm";
 import { z } from "zod";
+import { requireAuth, requireRole, canUpdateChecklistItem, canApproveStage, AuthenticatedRequest } from "../middleware/auth";
 
-const epmService = new EpmService();
+const epmService = new EpmService(storage);
 
 export function registerEpmRoutes(app: Express) {
   // Project Stages
@@ -77,8 +78,8 @@ export function registerEpmRoutes(app: Express) {
     }
   });
 
-  // Checklist Items
-  app.patch("/api/checklist-items/:id", async (req, res) => {
+  // Checklist Items - RBAC: tech can update assigned items; supervisor/admin can update any
+  app.patch("/api/checklist-items/:id", requireAuth, canUpdateChecklistItem, async (req, res) => {
     try {
       const itemId = req.params.id;
       const patchData = checklistItemPatchSchema.parse(req.body);
@@ -92,12 +93,32 @@ export function registerEpmRoutes(app: Express) {
     }
   });
 
-  // Stage Approvals
-  app.post("/api/projects/:id/stages/:stageId/approve", async (req, res) => {
+  // Stage Approvals - RBAC: only supervisor/admin; log admin overrides
+  app.post("/api/projects/:id/stages/:stageId/approve", requireAuth, canApproveStage, async (req, res) => {
     try {
       const { id: projectId, stageId } = req.params;
       const approvalData = stageApproveSchema.parse(req.body);
-      const approverId = "system"; // TODO: Get from authenticated user session
+      const authReq = req as AuthenticatedRequest;
+      const approverId = authReq.user.id;
+      
+      // Check if user has sufficient role for this stage
+      const stage = await storage.getProjectStage(stageId);
+      if (stage && stage.requiredApproverRole) {
+        const roleHierarchy = { 'tech': 1, 'supervisor': 2, 'admin': 3 };
+        const userLevel = roleHierarchy[authReq.user.role] || 0;
+        const requiredLevel = roleHierarchy[stage.requiredApproverRole as keyof typeof roleHierarchy] || 0;
+        
+        if (userLevel < requiredLevel) {
+          return res.status(403).json({ 
+            error: `Insufficient role for approval. Stage requires ${stage.requiredApproverRole}, but user is ${authReq.user.role}` 
+          });
+        }
+        
+        // Log admin override when admin approves supervisor-required stage
+        if (authReq.user.role === 'admin' && stage.requiredApproverRole !== 'admin') {
+          console.log(`Admin override detected: ${authReq.user.username} approving stage requiring ${stage.requiredApproverRole}`);
+        }
+      }
       
       await epmService.approveStage(projectId, stageId, approvalData, approverId);
       res.json({ success: true, message: "Stage approval processed" });
