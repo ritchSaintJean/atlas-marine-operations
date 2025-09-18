@@ -211,6 +211,70 @@ export const photos = pgTable("photos", {
   takenAt: timestamp("taken_at").defaultNow().notNull(),
 });
 
+// Workflow Management for Certifications
+export const certificationWorkflows = pgTable("certification_workflows", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  certificationId: varchar("certification_id").notNull(),
+  workflowType: text("workflow_type").notNull(), // renewal, initial, update
+  status: text("status").notNull().default("pending"), // pending, in_progress, approved, rejected, completed
+  initiatedBy: varchar("initiated_by").notNull(),
+  assignedTo: varchar("assigned_to"), // supervisor or admin handling the workflow
+  priority: text("priority").notNull().default("medium"), // low, medium, high, urgent
+  dueDate: timestamp("due_date"),
+  completedDate: timestamp("completed_date"),
+  notes: text("notes"),
+  approvalNotes: text("approval_notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Automated Notification System
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  recipientId: varchar("recipient_id").notNull(), // user to receive notification
+  type: text("type").notNull(), // certification_expiring, workflow_assigned, document_required, etc.
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  relatedType: text("related_type"), // certification, medical_clearance, workflow
+  relatedId: varchar("related_id"), // ID of related record
+  priority: text("priority").notNull().default("medium"), // low, medium, high, urgent
+  status: text("status").notNull().default("unread"), // unread, read, dismissed, acted
+  scheduledFor: timestamp("scheduled_for").defaultNow().notNull(),
+  readAt: timestamp("read_at"),
+  actionUrl: text("action_url"), // Link to take action on the notification
+  metadata: jsonb("metadata"), // Additional data for the notification
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Document Management for Certifications
+export const certificationDocuments = pgTable("certification_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  certificationId: varchar("certification_id"),
+  medicalClearanceId: varchar("medical_clearance_id"),
+  filename: text("filename").notNull(),
+  originalName: text("original_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  fileSize: integer("file_size").notNull(),
+  documentType: text("document_type").notNull(), // certificate, medical_report, renewal_form
+  uploadedBy: varchar("uploaded_by").notNull(),
+  verificationStatus: text("verification_status").notNull().default("pending"), // pending, verified, rejected
+  verifiedBy: varchar("verified_by"),
+  verifiedAt: timestamp("verified_at"),
+  expirationDate: timestamp("expiration_date"), // for certificates with expiry
+  version: integer("version").notNull().default(1),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Workflow Approval History
+export const workflowApprovals = pgTable("workflow_approvals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  workflowId: varchar("workflow_id").notNull(),
+  approverId: varchar("approver_id").notNull(),
+  action: text("action").notNull(), // approved, rejected, requested_changes
+  comments: text("comments"),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+});
+
 // Checklist Templates and Instances
 export const checklistTemplates = pgTable("checklist_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -440,3 +504,71 @@ export type ChecklistInstance = typeof checklistInstances.$inferSelect;
 export type InsertChecklistInstance = z.infer<typeof insertChecklistInstanceSchema>;
 export type PersonnelEquipmentAssignment = typeof personnelEquipmentAssignments.$inferSelect;
 export type InsertPersonnelEquipmentAssignment = z.infer<typeof insertPersonnelEquipmentAssignmentSchema>;
+
+// Workflow management schemas
+export const insertCertificationWorkflowSchema = createInsertSchema(certificationWorkflows).pick({
+  certificationId: true,
+  workflowType: true,
+  status: true,
+  initiatedBy: true,
+  assignedTo: true,
+  priority: true,
+  notes: true,
+  approvalNotes: true,
+}).extend({
+  dueDate: z.string().transform(val => new Date(val)).optional(),
+  completedDate: z.string().transform(val => new Date(val)).optional(),
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications).pick({
+  recipientId: true,
+  type: true,
+  title: true,
+  message: true,
+  relatedType: true,
+  relatedId: true,
+  priority: true,
+  status: true,
+  actionUrl: true,
+  metadata: true,
+}).extend({
+  scheduledFor: z.string().transform(val => new Date(val)).optional(),
+  readAt: z.string().transform(val => new Date(val)).optional(),
+});
+
+export const insertCertificationDocumentSchema = createInsertSchema(certificationDocuments).pick({
+  certificationId: true,
+  medicalClearanceId: true,
+  filename: true,
+  originalName: true,
+  mimeType: true,
+  fileSize: true,
+  documentType: true,
+  uploadedBy: true,
+  verificationStatus: true,
+  verifiedBy: true,
+  version: true,
+  notes: true,
+}).extend({
+  verifiedAt: z.string().transform(val => new Date(val)).optional(),
+  expirationDate: z.string().transform(val => new Date(val)).optional(),
+});
+
+export const insertWorkflowApprovalSchema = createInsertSchema(workflowApprovals).pick({
+  workflowId: true,
+  approverId: true,
+  action: true,
+  comments: true,
+}).extend({
+  timestamp: z.string().transform(val => new Date(val)).optional(),
+});
+
+// Workflow management types
+export type CertificationWorkflow = typeof certificationWorkflows.$inferSelect;
+export type InsertCertificationWorkflow = z.infer<typeof insertCertificationWorkflowSchema>;
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type CertificationDocument = typeof certificationDocuments.$inferSelect;
+export type InsertCertificationDocument = z.infer<typeof insertCertificationDocumentSchema>;
+export type WorkflowApproval = typeof workflowApprovals.$inferSelect;
+export type InsertWorkflowApproval = z.infer<typeof insertWorkflowApprovalSchema>;

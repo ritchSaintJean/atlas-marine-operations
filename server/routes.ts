@@ -16,7 +16,11 @@ import {
   insertCertificationSchema,
   insertMedicalClearanceSchema,
   insertChecklistTemplateSchema,
-  insertChecklistInstanceSchema
+  insertChecklistInstanceSchema,
+  insertCertificationWorkflowSchema,
+  insertNotificationSchema,
+  insertCertificationDocumentSchema,
+  insertWorkflowApprovalSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -585,6 +589,144 @@ export async function registerRoutes(app: Express): Promise<Server> {
         days ? parseInt(days as string) : undefined
       );
       res.json(expiringClearances);
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Certification Workflow Management
+  app.get("/api/workflows", async (req, res) => {
+    try {
+      const { status, assignedTo } = req.query;
+      const workflows = await storage.listCertificationWorkflows(
+        status as string | undefined,
+        assignedTo as string | undefined
+      );
+      res.json(workflows);
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/workflows/:id", async (req, res) => {
+    try {
+      const workflow = await storage.getCertificationWorkflow(req.params.id);
+      if (!workflow) {
+        return res.status(404).json({ error: "Workflow not found" });
+      }
+      res.json(workflow);
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/workflows", async (req, res) => {
+    try {
+      const workflowData = insertCertificationWorkflowSchema.parse(req.body);
+      const workflow = await storage.createCertificationWorkflow(workflowData);
+      res.json(workflow);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid workflow data" });
+    }
+  });
+
+  app.patch("/api/workflows/:id", async (req, res) => {
+    try {
+      const workflow = await storage.updateCertificationWorkflow(req.params.id, req.body);
+      if (!workflow) {
+        return res.status(404).json({ error: "Workflow not found" });
+      }
+      res.json(workflow);
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Notifications
+  app.get("/api/notifications", async (req, res) => {
+    try {
+      const { recipientId, status } = req.query;
+      const notifications = await storage.listNotifications(
+        recipientId as string | undefined,
+        status as string | undefined
+      );
+      res.json(notifications);
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/notifications/unread/:userId", async (req, res) => {
+    try {
+      const notifications = await storage.getUnreadNotifications(req.params.userId);
+      res.json(notifications);
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/notifications", async (req, res) => {
+    try {
+      const notificationData = insertNotificationSchema.parse(req.body);
+      const notification = await storage.createNotification(notificationData);
+      res.json(notification);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid notification data" });
+    }
+  });
+
+  app.patch("/api/notifications/:id/read", async (req, res) => {
+    try {
+      const notification = await storage.markNotificationAsRead(req.params.id);
+      if (!notification) {
+        return res.status(404).json({ error: "Notification not found" });
+      }
+      res.json(notification);
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/notifications/generate", async (req, res) => {
+    try {
+      const notifications = await storage.createAutomatedNotifications();
+      res.json(notifications);
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Document Management
+  app.get("/api/documents", async (req, res) => {
+    try {
+      const { certificationId, medicalClearanceId } = req.query;
+      const documents = await storage.listCertificationDocuments(
+        certificationId as string | undefined,
+        medicalClearanceId as string | undefined
+      );
+      res.json(documents);
+    } catch (error) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/documents", async (req, res) => {
+    try {
+      const documentData = insertCertificationDocumentSchema.parse(req.body);
+      const document = await storage.createCertificationDocument(documentData);
+      res.json(document);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid document data" });
+    }
+  });
+
+  app.patch("/api/documents/:id", async (req, res) => {
+    try {
+      const document = await storage.updateCertificationDocument(req.params.id, req.body);
+      if (!document) {
+        return res.status(404).json({ error: "Document not found" });
+      }
+      res.json(document);
     } catch (error) {
       res.status(500).json({ error: "Internal server error" });
     }

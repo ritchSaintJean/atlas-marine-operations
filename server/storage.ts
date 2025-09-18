@@ -14,7 +14,11 @@ import {
   type MedicalClearance, type InsertMedicalClearance,
   type ChecklistTemplate, type InsertChecklistTemplate,
   type ChecklistInstance, type InsertChecklistInstance,
-  type PersonnelEquipmentAssignment, type InsertPersonnelEquipmentAssignment
+  type PersonnelEquipmentAssignment, type InsertPersonnelEquipmentAssignment,
+  type CertificationWorkflow, type InsertCertificationWorkflow,
+  type Notification, type InsertNotification,
+  type CertificationDocument, type InsertCertificationDocument,
+  type WorkflowApproval, type InsertWorkflowApproval
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -156,6 +160,34 @@ export interface IStorage {
   listChecklistInstances(relatedId?: string, relatedType?: string): Promise<ChecklistInstance[]>;
   createChecklistInstance(instance: InsertChecklistInstance): Promise<ChecklistInstance>;
   updateChecklistInstance(id: string, updates: Partial<ChecklistInstance>): Promise<ChecklistInstance | undefined>;
+
+  // Certification Workflows
+  getCertificationWorkflow(id: string): Promise<CertificationWorkflow | undefined>;
+  listCertificationWorkflows(status?: string, assignedTo?: string): Promise<CertificationWorkflow[]>;
+  createCertificationWorkflow(workflow: InsertCertificationWorkflow): Promise<CertificationWorkflow>;
+  updateCertificationWorkflow(id: string, updates: Partial<CertificationWorkflow>): Promise<CertificationWorkflow | undefined>;
+  getWorkflowsByDueDate(dueDate?: Date): Promise<CertificationWorkflow[]>;
+
+  // Notifications
+  getNotification(id: string): Promise<Notification | undefined>;
+  listNotifications(recipientId?: string, status?: string): Promise<Notification[]>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  updateNotification(id: string, updates: Partial<Notification>): Promise<Notification | undefined>;
+  getUnreadNotifications(recipientId: string): Promise<Notification[]>;
+  markNotificationAsRead(id: string): Promise<Notification | undefined>;
+  createAutomatedNotifications(): Promise<Notification[]>; // Auto-generate expiration notifications
+
+  // Document Management
+  getCertificationDocument(id: string): Promise<CertificationDocument | undefined>;
+  listCertificationDocuments(certificationId?: string, medicalClearanceId?: string): Promise<CertificationDocument[]>;
+  createCertificationDocument(document: InsertCertificationDocument): Promise<CertificationDocument>;
+  updateCertificationDocument(id: string, updates: Partial<CertificationDocument>): Promise<CertificationDocument | undefined>;
+  getDocumentsByVerificationStatus(status: string): Promise<CertificationDocument[]>;
+
+  // Workflow Approvals
+  getWorkflowApproval(id: string): Promise<WorkflowApproval | undefined>;
+  listWorkflowApprovals(workflowId?: string, approverId?: string): Promise<WorkflowApproval[]>;
+  createWorkflowApproval(approval: InsertWorkflowApproval): Promise<WorkflowApproval>;
 }
 
 export class MemStorage implements IStorage {
@@ -177,6 +209,10 @@ export class MemStorage implements IStorage {
   private personnelEquipmentAssignments: Map<string, PersonnelEquipmentAssignment>;
   private checklistTemplates: Map<string, ChecklistTemplate>;
   private checklistInstances: Map<string, ChecklistInstance>;
+  private certificationWorkflows: Map<string, CertificationWorkflow>;
+  private notifications: Map<string, Notification>;
+  private certificationDocuments: Map<string, CertificationDocument>;
+  private workflowApprovals: Map<string, WorkflowApproval>;
 
   constructor() {
     this.users = new Map();
@@ -197,6 +233,10 @@ export class MemStorage implements IStorage {
     this.personnelEquipmentAssignments = new Map();
     this.checklistTemplates = new Map();
     this.checklistInstances = new Map();
+    this.certificationWorkflows = new Map();
+    this.notifications = new Map();
+    this.certificationDocuments = new Map();
+    this.workflowApprovals = new Map();
     
     this.initializeDefaultData();
   }
@@ -574,11 +614,186 @@ export class MemStorage implements IStorage {
       }
     ];
 
+    // Sample certification workflows
+    const sampleWorkflows = [
+      {
+        id: "workflow-001",
+        certificationId: "cert-001", // Mike's Confined Space Entry (expires soon)
+        workflowType: "renewal",
+        status: "pending",
+        initiatedBy: "emp-002", // Sarah initiated the renewal
+        assignedTo: "emp-001", // Assigned to Mike
+        priority: "high",
+        dueDate: new Date("2025-01-15"), // Due before expiration
+        completedDate: null,
+        notes: "Certification expires 1/15/2025. Schedule renewal training ASAP.",
+        approvalNotes: null,
+        createdAt: new Date("2024-09-10")
+      },
+      {
+        id: "workflow-002", 
+        certificationId: "cert-002", // Mike's Abrasive Blasting (expired)
+        workflowType: "renewal",
+        status: "in_progress",
+        initiatedBy: "emp-002",
+        assignedTo: "emp-001",
+        priority: "urgent",
+        dueDate: new Date("2024-09-25"), // Past due
+        completedDate: null,
+        notes: "EXPIRED certification. Immediate renewal required before return to blast operations.",
+        approvalNotes: "Training scheduled for 9/20/2024",
+        createdAt: new Date("2024-08-15")
+      },
+      {
+        id: "workflow-003",
+        certificationId: "cert-005", // Sarah's Safety Officer cert
+        workflowType: "update",
+        status: "completed",
+        initiatedBy: "emp-002",
+        assignedTo: "emp-002",
+        priority: "medium",
+        dueDate: new Date("2024-09-01"),
+        completedDate: new Date("2024-08-28"),
+        notes: "Updated safety procedures documentation",
+        approvalNotes: "Documentation reviewed and approved by management",
+        createdAt: new Date("2024-08-20")
+      }
+    ];
+
+    // Sample notifications
+    const sampleNotifications = [
+      {
+        id: "notif-001",
+        recipientId: "emp-001", // Mike
+        type: "certification_expiring",
+        title: "Certification Expiring Soon",
+        message: "Your Confined Space Entry certification expires on 1/15/2025. Please renew as soon as possible.",
+        relatedType: "certification",
+        relatedId: "cert-001",
+        priority: "high",
+        status: "unread",
+        scheduledFor: new Date("2024-09-18"),
+        readAt: null,
+        actionUrl: "/personnel?certId=cert-001",
+        metadata: { daysUntilExpiration: 119 },
+        createdAt: new Date("2024-09-18")
+      },
+      {
+        id: "notif-002",
+        recipientId: "emp-001", // Mike 
+        type: "certification_expired",
+        title: "URGENT: Certification Expired",
+        message: "Your Abrasive Blasting Certification has EXPIRED. You cannot perform blast operations until renewed.",
+        relatedType: "certification", 
+        relatedId: "cert-002",
+        priority: "urgent",
+        status: "read",
+        scheduledFor: new Date("2024-06-21"),
+        readAt: new Date("2024-06-21"),
+        actionUrl: "/personnel?certId=cert-002",
+        metadata: { daysOverdue: 89 },
+        createdAt: new Date("2024-06-21")
+      },
+      {
+        id: "notif-003",
+        recipientId: "emp-003", // Carlos
+        type: "medical_clearance_expiring",
+        title: "Medical Clearance Renewal Due",
+        message: "Your DOT Physical clearance expires on 12/1/2024. Please schedule renewal appointment.",
+        relatedType: "medical_clearance",
+        relatedId: "medical-004",
+        priority: "medium",
+        status: "unread",
+        scheduledFor: new Date("2024-09-18"),
+        readAt: null,
+        actionUrl: "/personnel?medicalId=medical-004",
+        metadata: { daysUntilExpiration: 74 },
+        createdAt: new Date("2024-09-18")
+      },
+      {
+        id: "notif-004",
+        recipientId: "emp-002", // Sarah (supervisor notification)
+        type: "workflow_assigned",
+        title: "Workflow Assignment",
+        message: "You have been assigned to review Mike Rodriguez's certification renewal workflow.",
+        relatedType: "workflow",
+        relatedId: "workflow-001",
+        priority: "medium",
+        status: "unread",
+        scheduledFor: new Date("2024-09-10"),
+        readAt: null,
+        actionUrl: "/workflows?id=workflow-001",
+        metadata: { workflowType: "renewal" },
+        createdAt: new Date("2024-09-10")
+      }
+    ];
+
+    // Sample certification documents
+    const sampleDocuments = [
+      {
+        id: "doc-001",
+        certificationId: "cert-001", // Mike's Confined Space Entry
+        medicalClearanceId: null,
+        filename: "confined_space_cert_mike.pdf",
+        originalName: "Mike Rodriguez - Confined Space Entry Certificate.pdf",
+        mimeType: "application/pdf",
+        fileSize: 245760, // 240KB
+        documentType: "certificate",
+        uploadedBy: "emp-001", // Mike uploaded it
+        verificationStatus: "verified",
+        verifiedBy: "emp-002", // Sarah verified it
+        verifiedAt: new Date("2024-09-15"),
+        expirationDate: new Date("2025-01-15"),
+        version: 1,
+        notes: "Original certificate from OSHA training program",
+        createdAt: new Date("2024-09-15")
+      },
+      {
+        id: "doc-002",
+        certificationId: null,
+        medicalClearanceId: "medical-004", // Carlos's DOT Physical
+        filename: "dot_physical_carlos.pdf",
+        originalName: "Carlos Torres - DOT Physical Report.pdf",
+        mimeType: "application/pdf",
+        fileSize: 178432, // 174KB
+        documentType: "medical_report",
+        uploadedBy: "emp-003", // Carlos uploaded it
+        verificationStatus: "pending",
+        verifiedBy: null,
+        verifiedAt: null,
+        expirationDate: new Date("2024-12-01"),
+        version: 1,
+        notes: "Annual DOT physical examination required for marine operations",
+        createdAt: new Date("2024-09-17")
+      },
+      {
+        id: "doc-003",
+        certificationId: "cert-002", // Mike's expired Abrasive Blasting cert
+        medicalClearanceId: null,
+        filename: "abrasive_blasting_renewal_form.pdf",
+        originalName: "Abrasive Blasting Renewal Application - Mike Rodriguez.pdf",
+        mimeType: "application/pdf",
+        fileSize: 156672, // 153KB
+        documentType: "renewal_form",
+        uploadedBy: "emp-002", // Sarah uploaded renewal form
+        verificationStatus: "pending",
+        verifiedBy: null,
+        verifiedAt: null,
+        expirationDate: null, // Renewal forms don't expire
+        version: 1,
+        notes: "Renewal application submitted for expired certification",
+        createdAt: new Date("2024-09-18")
+      }
+    ];
+
     // Initialize sample data
     sampleUsers.forEach(user => this.users.set(user.id, user));
     sampleCertifications.forEach(cert => this.certifications.set(cert.id, cert));
     sampleMedicalClearances.forEach(clearance => this.medicalClearances.set(clearance.id, clearance));
     samplePersonnelEquipmentAssignments.forEach(assignment => this.personnelEquipmentAssignments.set(assignment.id, assignment));
+    sampleWorkflows.forEach(workflow => this.certificationWorkflows.set(workflow.id, workflow));
+    sampleNotifications.forEach(notification => this.notifications.set(notification.id, notification));
+    sampleDocuments.forEach(document => this.certificationDocuments.set(document.id, document));
   }
 
   // User methods  
@@ -1239,6 +1454,263 @@ export class MemStorage implements IStorage {
     const updated = { ...instance, ...updates };
     this.checklistInstances.set(id, updated);
     return updated;
+  }
+
+  // Certification Workflows
+  async getCertificationWorkflow(id: string): Promise<CertificationWorkflow | undefined> {
+    return this.certificationWorkflows.get(id);
+  }
+
+  async listCertificationWorkflows(status?: string, assignedTo?: string): Promise<CertificationWorkflow[]> {
+    let workflows = Array.from(this.certificationWorkflows.values());
+    
+    if (status) {
+      workflows = workflows.filter(w => w.status === status);
+    }
+    
+    if (assignedTo) {
+      workflows = workflows.filter(w => w.assignedTo === assignedTo);
+    }
+    
+    return workflows;
+  }
+
+  async createCertificationWorkflow(workflow: InsertCertificationWorkflow): Promise<CertificationWorkflow> {
+    const id = randomUUID();
+    const certificationWorkflow: CertificationWorkflow = { 
+      ...workflow, 
+      id, 
+      status: workflow.status || "pending",
+      priority: workflow.priority || "medium",
+      assignedTo: workflow.assignedTo || null,
+      dueDate: workflow.dueDate || null,
+      completedDate: workflow.completedDate || null,
+      notes: workflow.notes || null,
+      approvalNotes: workflow.approvalNotes || null,
+      createdAt: new Date() 
+    };
+    this.certificationWorkflows.set(id, certificationWorkflow);
+    return certificationWorkflow;
+  }
+
+  async updateCertificationWorkflow(id: string, updates: Partial<CertificationWorkflow>): Promise<CertificationWorkflow | undefined> {
+    const workflow = this.certificationWorkflows.get(id);
+    if (!workflow) return undefined;
+    const updated = { ...workflow, ...updates };
+    this.certificationWorkflows.set(id, updated);
+    return updated;
+  }
+
+  async getWorkflowsByDueDate(dueDate?: Date): Promise<CertificationWorkflow[]> {
+    const cutoffDate = dueDate || new Date();
+    
+    return Array.from(this.certificationWorkflows.values()).filter(workflow => {
+      if (!workflow.dueDate) return false;
+      return workflow.dueDate <= cutoffDate && workflow.status !== "completed";
+    });
+  }
+
+  // Notifications
+  async getNotification(id: string): Promise<Notification | undefined> {
+    return this.notifications.get(id);
+  }
+
+  async listNotifications(recipientId?: string, status?: string): Promise<Notification[]> {
+    let notifications = Array.from(this.notifications.values());
+    
+    if (recipientId) {
+      notifications = notifications.filter(n => n.recipientId === recipientId);
+    }
+    
+    if (status) {
+      notifications = notifications.filter(n => n.status === status);
+    }
+    
+    return notifications.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const id = randomUUID();
+    const newNotification: Notification = { 
+      ...notification, 
+      id, 
+      priority: notification.priority || "medium",
+      status: notification.status || "unread",
+      relatedType: notification.relatedType || null,
+      relatedId: notification.relatedId || null,
+      actionUrl: notification.actionUrl || null,
+      metadata: notification.metadata || null,
+      scheduledFor: notification.scheduledFor || new Date(),
+      readAt: notification.readAt || null,
+      createdAt: new Date() 
+    };
+    this.notifications.set(id, newNotification);
+    return newNotification;
+  }
+
+  async updateNotification(id: string, updates: Partial<Notification>): Promise<Notification | undefined> {
+    const notification = this.notifications.get(id);
+    if (!notification) return undefined;
+    const updated = { ...notification, ...updates };
+    this.notifications.set(id, updated);
+    return updated;
+  }
+
+  async getUnreadNotifications(recipientId: string): Promise<Notification[]> {
+    return Array.from(this.notifications.values())
+      .filter(n => n.recipientId === recipientId && n.status === "unread")
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async markNotificationAsRead(id: string): Promise<Notification | undefined> {
+    const notification = this.notifications.get(id);
+    if (!notification) return undefined;
+    const updated = { ...notification, status: "read", readAt: new Date() };
+    this.notifications.set(id, updated);
+    return updated;
+  }
+
+  async createAutomatedNotifications(): Promise<Notification[]> {
+    const notifications: Notification[] = [];
+    
+    // Get certifications expiring soon
+    const expiringCerts = await this.getCertificationsExpiringSoon(30);
+    for (const cert of expiringCerts) {
+      // Check if notification already exists to avoid duplicates
+      const existingNotification = Array.from(this.notifications.values()).find(
+        n => n.relatedType === "certification" && 
+             n.relatedId === cert.id && 
+             n.type === "certification_expiring" &&
+             n.recipientId === cert.userId
+      );
+      
+      if (!existingNotification) {
+        const notification = await this.createNotification({
+          recipientId: cert.userId,
+          type: "certification_expiring",
+          title: "Certification Expiring Soon",
+          message: `Your ${cert.name} certification expires on ${cert.expirationDate?.toLocaleDateString()}. Please renew as soon as possible.`,
+          relatedType: "certification",
+          relatedId: cert.id,
+          priority: "high",
+          actionUrl: `/personnel?certId=${cert.id}`,
+          metadata: { daysUntilExpiration: Math.ceil((cert.expirationDate!.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) }
+        });
+        notifications.push(notification);
+      }
+    }
+    
+    // Get medical clearances expiring soon
+    const expiringMedical = await this.getMedicalClearancesExpiringSoon(30);
+    for (const medical of expiringMedical) {
+      // Check if notification already exists to avoid duplicates
+      const existingNotification = Array.from(this.notifications.values()).find(
+        n => n.relatedType === "medical_clearance" && 
+             n.relatedId === medical.id && 
+             n.type === "medical_clearance_expiring" &&
+             n.recipientId === medical.userId
+      );
+      
+      if (!existingNotification) {
+        const notification = await this.createNotification({
+          recipientId: medical.userId,
+          type: "medical_clearance_expiring",
+          title: "Medical Clearance Expiring Soon",
+          message: `Your ${medical.description} clearance expires on ${medical.expirationDate?.toLocaleDateString()}. Please schedule renewal appointment.`,
+          relatedType: "medical_clearance",
+          relatedId: medical.id,
+          priority: "high",
+          actionUrl: `/personnel?medicalId=${medical.id}`,
+          metadata: { daysUntilExpiration: Math.ceil((medical.expirationDate!.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) }
+        });
+        notifications.push(notification);
+      }
+    }
+    
+    return notifications;
+  }
+
+  // Document Management
+  async getCertificationDocument(id: string): Promise<CertificationDocument | undefined> {
+    return this.certificationDocuments.get(id);
+  }
+
+  async listCertificationDocuments(certificationId?: string, medicalClearanceId?: string): Promise<CertificationDocument[]> {
+    let documents = Array.from(this.certificationDocuments.values());
+    
+    if (certificationId) {
+      documents = documents.filter(d => d.certificationId === certificationId);
+    }
+    
+    if (medicalClearanceId) {
+      documents = documents.filter(d => d.medicalClearanceId === medicalClearanceId);
+    }
+    
+    return documents.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  async createCertificationDocument(document: InsertCertificationDocument): Promise<CertificationDocument> {
+    const id = randomUUID();
+    const certificationDocument: CertificationDocument = { 
+      ...document, 
+      id, 
+      certificationId: document.certificationId || null,
+      medicalClearanceId: document.medicalClearanceId || null,
+      verificationStatus: document.verificationStatus || "pending",
+      verifiedBy: document.verifiedBy || null,
+      verifiedAt: document.verifiedAt || null,
+      expirationDate: document.expirationDate || null,
+      version: document.version || 1,
+      notes: document.notes || null,
+      createdAt: new Date() 
+    };
+    this.certificationDocuments.set(id, certificationDocument);
+    return certificationDocument;
+  }
+
+  async updateCertificationDocument(id: string, updates: Partial<CertificationDocument>): Promise<CertificationDocument | undefined> {
+    const document = this.certificationDocuments.get(id);
+    if (!document) return undefined;
+    const updated = { ...document, ...updates };
+    this.certificationDocuments.set(id, updated);
+    return updated;
+  }
+
+  async getDocumentsByVerificationStatus(status: string): Promise<CertificationDocument[]> {
+    return Array.from(this.certificationDocuments.values())
+      .filter(d => d.verificationStatus === status)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  // Workflow Approvals
+  async getWorkflowApproval(id: string): Promise<WorkflowApproval | undefined> {
+    return this.workflowApprovals.get(id);
+  }
+
+  async listWorkflowApprovals(workflowId?: string, approverId?: string): Promise<WorkflowApproval[]> {
+    let approvals = Array.from(this.workflowApprovals.values());
+    
+    if (workflowId) {
+      approvals = approvals.filter(a => a.workflowId === workflowId);
+    }
+    
+    if (approverId) {
+      approvals = approvals.filter(a => a.approverId === approverId);
+    }
+    
+    return approvals.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  }
+
+  async createWorkflowApproval(approval: InsertWorkflowApproval): Promise<WorkflowApproval> {
+    const id = randomUUID();
+    const workflowApproval: WorkflowApproval = { 
+      ...approval, 
+      id, 
+      comments: approval.comments || null,
+      timestamp: approval.timestamp || new Date() 
+    };
+    this.workflowApprovals.set(id, workflowApproval);
+    return workflowApproval;
   }
 }
 
