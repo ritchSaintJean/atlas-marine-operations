@@ -10,6 +10,7 @@ import Projects from "@/pages/Projects";
 import Equipment from "@/pages/Equipment";
 import Safety from "@/pages/Safety";
 import Inventory from "@/pages/Inventory";
+import Personnel from "@/pages/Personnel";
 import Checklists from "@/pages/Checklists";
 import Camera from "@/pages/Camera";
 import Profile from "@/pages/Profile";
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/equipment" component={Equipment} />
       <Route path="/safety" component={Safety} />
       <Route path="/inventory" component={Inventory} />
+      <Route path="/personnel" component={Personnel} />
       <Route path="/checklists" component={Checklists} />
       <Route path="/camera" component={Camera} />
       <Route path="/profile" component={Profile} />
