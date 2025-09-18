@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Home, Wrench, Clipboard, Camera, User } from "lucide-react";
+import { Home, Wrench, Shield, Clipboard, Camera, User } from "lucide-react";
 
 interface NavigationBarProps {
   activeTab: string;
@@ -18,7 +18,7 @@ export default function NavigationBar({
   const tabs = [
     { id: "projects", label: "Projects", icon: Home },
     { id: "equipment", label: "Equipment", icon: Wrench },
-    { id: "checklists", label: "Tasks", icon: Clipboard },
+    { id: "safety", label: "Safety", icon: Shield },
     { id: "camera", label: "Camera", icon: Camera },
     { id: "profile", label: "Profile", icon: User },
   ];

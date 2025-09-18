@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import NavigationBar from "@/components/NavigationBar";
 import Projects from "@/pages/Projects";
 import Equipment from "@/pages/Equipment";
+import Safety from "@/pages/Safety";
 import Checklists from "@/pages/Checklists";
 import Camera from "@/pages/Camera";
 import Profile from "@/pages/Profile";
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/" component={Projects} />
       <Route path="/projects" component={Projects} />
       <Route path="/equipment" component={Equipment} />
+      <Route path="/safety" component={Safety} />
       <Route path="/checklists" component={Checklists} />
       <Route path="/camera" component={Camera} />
       <Route path="/profile" component={Profile} />
