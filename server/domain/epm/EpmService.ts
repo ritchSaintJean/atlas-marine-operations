@@ -205,7 +205,7 @@ export class EpmService {
     }
 
     const items = await storage.listChecklistItems(checklistId);
-    const templateItems = await storage.listChecklistTemplateItems(checklist.templateId);
+    const templateItems = (template.items as any[]) || [];
 
     // Join with template data to get labels, types, etc.
     const enrichedItems: ChecklistItem[] = items.map(item => {
@@ -216,7 +216,7 @@ export class EpmService {
         dueAt: item.dueAt || undefined,
         completedAt: item.completedAt || undefined,
         status: item.status as 'pending' | 'complete' | 'na' | 'blocked',
-        label: templateItem?.label || 'Unknown',
+        label: templateItem?.text || templateItem?.label || 'Unknown',
         type: (templateItem?.type as 'text' | 'number' | 'photo' | 'signature' | 'boolean' | 'select') || 'text',
         required: templateItem?.required || false,
         validations: templateItem?.validations || {},
@@ -284,7 +284,10 @@ export class EpmService {
     await this.updateChecklistStatus(updatedItem.projectChecklistId);
 
     // Get template info for response
-    const templateItem = await storage.getChecklistTemplateItem(updatedItem.templateItemId);
+    const checklist = await storage.getProjectChecklist(updatedItem.projectChecklistId);
+    const template = checklist ? await storage.getChecklistTemplate(checklist.templateId) : null;
+    const templateItems = (template?.items as any[]) || [];
+    const templateItem = templateItems.find(t => t.id === updatedItem.templateItemId);
     
     return {
       ...updatedItem,
@@ -292,7 +295,7 @@ export class EpmService {
       dueAt: updatedItem.dueAt || undefined,
       completedAt: updatedItem.completedAt || undefined,
       status: updatedItem.status as 'pending' | 'complete' | 'na' | 'blocked',
-      label: templateItem?.label || 'Unknown',
+      label: templateItem?.text || templateItem?.label || 'Unknown',
       type: (templateItem?.type as 'text' | 'number' | 'photo' | 'signature' | 'boolean' | 'select') || 'text',
       required: templateItem?.required || false,
       validations: templateItem?.validations || {},
@@ -394,7 +397,8 @@ export class EpmService {
 
     for (const checklist of checklists) {
       const items = await storage.listChecklistItems(checklist.id);
-      const templateItems = await storage.listChecklistTemplateItems(checklist.templateId);
+      const template = await storage.getChecklistTemplate(checklist.templateId);
+      const templateItems = (template?.items as any[]) || [];
       
       for (const item of items) {
         const templateItem = templateItems.find(t => t.id === item.templateItemId);

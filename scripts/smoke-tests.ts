@@ -34,7 +34,15 @@ async function smokeTests() {
 
     // Test EPM project stages API
     console.log('\n2️⃣ Testing EPM project stages...');
-    const stages = await apiRequest('GET', '/api/projects/demo-proj-001/stages');
+    
+    // First get the demo project by name since ID is auto-generated
+    const projects = await apiRequest('GET', '/api/projects');
+    const demoProject = projects.find((p: any) => p.name === 'Vessel Hull Blasting - MV Atlas');
+    if (!demoProject) {
+      throw new Error('Demo project "Vessel Hull Blasting - MV Atlas" not found');
+    }
+    
+    const stages = await apiRequest('GET', `/api/projects/${demoProject.id}/stages`);
     console.log(`✅ Retrieved ${stages.length} project stages`);
     
     if (stages.length !== 3) {
@@ -75,7 +83,7 @@ async function smokeTests() {
 
     // Test checklist instantiation
     console.log('\n4️⃣ Testing checklist instantiation...');
-    const checklist = await apiRequest('POST', '/api/projects/demo-proj-001/checklists', {
+    const checklist = await apiRequest('POST', `/api/projects/${demoProject.id}/checklists`, {
       templateId: hullBlastTemplate.id,
       stageId: stages[0].id // Associate with first stage
     });
@@ -95,7 +103,7 @@ async function smokeTests() {
 
     // Test progress calculation (should be 0% initially)
     console.log('\n5️⃣ Testing progress calculation...');
-    const initialProgress = await apiRequest('GET', '/api/projects/demo-proj-001/progress');
+    const initialProgress = await apiRequest('GET', `/api/projects/${demoProject.id}/progress`);
     
     if (initialProgress.overallPercentage !== 0) {
       throw new Error(`Expected 0% initial progress, got ${initialProgress.overallPercentage}%`);
@@ -127,7 +135,7 @@ async function smokeTests() {
 
     // Test progress calculation after partial completion
     console.log('\n7️⃣ Testing progress after partial completion...');
-    const partialProgress = await apiRequest('GET', '/api/projects/demo-proj-001/progress');
+    const partialProgress = await apiRequest('GET', `/api/projects/${demoProject.id}/progress`);
     const updatedStage1Progress = partialProgress.stages.find((s: any) => s.stageId === stages[0].id);
     
     const expectedProgress = Math.round((1 / 5) * 100); // 1 of 5 required items complete
