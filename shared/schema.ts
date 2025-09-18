@@ -117,6 +117,20 @@ export const equipmentAssignments = pgTable("equipment_assignments", {
   assignedBy: varchar("assigned_by").notNull(),
 });
 
+// Personnel Assignments to Equipment
+export const personnelEquipmentAssignments = pgTable("personnel_equipment_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  equipmentId: varchar("equipment_id").notNull(),
+  projectId: varchar("project_id"), // Optional - equipment may be assigned for general use
+  assignedDate: timestamp("assigned_date").defaultNow().notNull(),
+  returnedDate: timestamp("returned_date"),
+  assignedBy: varchar("assigned_by").notNull(),
+  purpose: text("purpose"), // "project_work", "training", "maintenance", etc.
+  status: text("status").notNull().default("active"), // active, completed, returned
+  notes: text("notes"),
+});
+
 // Daily Maintenance Logs
 export const maintenanceLogs = pgTable("maintenance_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -380,6 +394,19 @@ export const insertChecklistInstanceSchema = createInsertSchema(checklistInstanc
   date: z.string().transform(val => new Date(val)),
 });
 
+export const insertPersonnelEquipmentAssignmentSchema = createInsertSchema(personnelEquipmentAssignments).pick({
+  userId: true,
+  equipmentId: true,
+  projectId: true,
+  assignedBy: true,
+  purpose: true,
+  status: true,
+  notes: true,
+}).extend({
+  assignedDate: z.string().transform(val => new Date(val)).optional(),
+  returnedDate: z.string().transform(val => new Date(val)).optional(),
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -411,3 +438,5 @@ export type ChecklistTemplate = typeof checklistTemplates.$inferSelect;
 export type InsertChecklistTemplate = z.infer<typeof insertChecklistTemplateSchema>;
 export type ChecklistInstance = typeof checklistInstances.$inferSelect;
 export type InsertChecklistInstance = z.infer<typeof insertChecklistInstanceSchema>;
+export type PersonnelEquipmentAssignment = typeof personnelEquipmentAssignments.$inferSelect;
+export type InsertPersonnelEquipmentAssignment = z.infer<typeof insertPersonnelEquipmentAssignmentSchema>;

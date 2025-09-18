@@ -13,7 +13,8 @@ import {
   type Certification, type InsertCertification,
   type MedicalClearance, type InsertMedicalClearance,
   type ChecklistTemplate, type InsertChecklistTemplate,
-  type ChecklistInstance, type InsertChecklistInstance
+  type ChecklistInstance, type InsertChecklistInstance,
+  type PersonnelEquipmentAssignment, type InsertPersonnelEquipmentAssignment
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -124,17 +125,25 @@ export interface IStorage {
   createMedicalClearance(clearance: InsertMedicalClearance): Promise<MedicalClearance>;
   updateMedicalClearance(id: string, updates: Partial<MedicalClearance>): Promise<MedicalClearance | undefined>;
   getMedicalClearancesExpiringSoon(days?: number): Promise<MedicalClearance[]>;
+
+  // Personnel equipment assignments
+  listPersonnelEquipmentAssignments(userId?: string): Promise<PersonnelEquipmentAssignment[]>;
+  createPersonnelEquipmentAssignment(assignment: InsertPersonnelEquipmentAssignment): Promise<PersonnelEquipmentAssignment>;
+  updatePersonnelEquipmentAssignment(id: string, updates: Partial<PersonnelEquipmentAssignment>): Promise<PersonnelEquipmentAssignment | undefined>;
+  getActiveEquipmentAssignments(userId: string): Promise<PersonnelEquipmentAssignment[]>;
   
   // Personnel with full data
   getPersonnelWithCertifications(userId: string): Promise<{
     user: User;
     certifications: Certification[];
     medicalClearances: MedicalClearance[];
+    equipmentAssignments: PersonnelEquipmentAssignment[];
   } | undefined>;
   listAllPersonnelWithCertifications(): Promise<Array<{
     user: User;
     certifications: Certification[];
     medicalClearances: MedicalClearance[];
+    equipmentAssignments: PersonnelEquipmentAssignment[];
   }>>;
 
   // Checklist templates
@@ -165,6 +174,7 @@ export class MemStorage implements IStorage {
   private photos: Map<string, Photo>;
   private certifications: Map<string, Certification>;
   private medicalClearances: Map<string, MedicalClearance>;
+  private personnelEquipmentAssignments: Map<string, PersonnelEquipmentAssignment>;
   private checklistTemplates: Map<string, ChecklistTemplate>;
   private checklistInstances: Map<string, ChecklistInstance>;
 
@@ -184,6 +194,7 @@ export class MemStorage implements IStorage {
     this.photos = new Map();
     this.certifications = new Map();
     this.medicalClearances = new Map();
+    this.personnelEquipmentAssignments = new Map();
     this.checklistTemplates = new Map();
     this.checklistInstances = new Map();
     
@@ -499,10 +510,75 @@ export class MemStorage implements IStorage {
       }
     ];
 
+    // Sample personnel equipment assignments
+    const samplePersonnelEquipmentAssignments = [
+      {
+        id: "assign-001",
+        userId: "emp-001",
+        equipmentId: "eq-blast-pot-001",
+        projectId: "proj-vessel-alpha",
+        assignedDate: new Date("2024-09-15"),
+        returnedDate: null,
+        assignedBy: "emp-002",
+        purpose: "project_work",
+        status: "active",
+        notes: "Assigned for hull blasting operations"
+      },
+      {
+        id: "assign-002", 
+        userId: "emp-001",
+        equipmentId: "eq-compressor-900",
+        projectId: "proj-vessel-alpha",
+        assignedDate: new Date("2024-09-15"),
+        returnedDate: null,
+        assignedBy: "emp-002",
+        purpose: "project_work", 
+        status: "active",
+        notes: "Primary compressor for blast operations"
+      },
+      {
+        id: "assign-003",
+        userId: "emp-002",
+        equipmentId: "eq-safety-monitor",
+        projectId: null,
+        assignedDate: new Date("2024-09-01"),
+        returnedDate: null,
+        assignedBy: "supervisor-001",
+        purpose: "safety_monitoring",
+        status: "active",
+        notes: "Permanent assignment for safety oversight"
+      },
+      {
+        id: "assign-004",
+        userId: "emp-003",
+        equipmentId: "eq-crane-mobile",
+        projectId: "proj-maintenance-dock",
+        assignedDate: new Date("2024-09-16"),
+        returnedDate: null,
+        assignedBy: "emp-002",
+        purpose: "project_work",
+        status: "active",
+        notes: "Equipment lifting and positioning"
+      },
+      {
+        id: "assign-005",
+        userId: "emp-003", 
+        equipmentId: "eq-vacuum-system",
+        projectId: "proj-maintenance-dock",
+        assignedDate: new Date("2024-09-16"),
+        returnedDate: null,
+        assignedBy: "emp-002",
+        purpose: "project_work",
+        status: "active",
+        notes: "Debris cleanup operations"
+      }
+    ];
+
     // Initialize sample data
     sampleUsers.forEach(user => this.users.set(user.id, user));
     sampleCertifications.forEach(cert => this.certifications.set(cert.id, cert));
     sampleMedicalClearances.forEach(clearance => this.medicalClearances.set(clearance.id, clearance));
+    samplePersonnelEquipmentAssignments.forEach(assignment => this.personnelEquipmentAssignments.set(assignment.id, assignment));
   }
 
   // User methods  
@@ -1034,25 +1110,68 @@ export class MemStorage implements IStorage {
     });
   }
 
+  // Personnel equipment assignments methods
+  async listPersonnelEquipmentAssignments(userId?: string): Promise<PersonnelEquipmentAssignment[]> {
+    const assignments = Array.from(this.personnelEquipmentAssignments.values());
+    if (userId) {
+      return assignments.filter(assignment => assignment.userId === userId);
+    }
+    return assignments;
+  }
+
+  async createPersonnelEquipmentAssignment(assignmentData: InsertPersonnelEquipmentAssignment): Promise<PersonnelEquipmentAssignment> {
+    const id = randomUUID();
+    const assignment: PersonnelEquipmentAssignment = {
+      ...assignmentData,
+      id,
+      assignedDate: assignmentData.assignedDate || new Date(),
+      returnedDate: assignmentData.returnedDate || null,
+      projectId: assignmentData.projectId || null,
+      purpose: assignmentData.purpose || null,
+      status: assignmentData.status || "active",
+      notes: assignmentData.notes || null
+    };
+    this.personnelEquipmentAssignments.set(id, assignment);
+    return assignment;
+  }
+
+  async updatePersonnelEquipmentAssignment(id: string, updates: Partial<PersonnelEquipmentAssignment>): Promise<PersonnelEquipmentAssignment | undefined> {
+    const assignment = this.personnelEquipmentAssignments.get(id);
+    if (!assignment) return undefined;
+    
+    const updatedAssignment = { ...assignment, ...updates };
+    this.personnelEquipmentAssignments.set(id, updatedAssignment);
+    return updatedAssignment;
+  }
+
+  async getActiveEquipmentAssignments(userId: string): Promise<PersonnelEquipmentAssignment[]> {
+    return Array.from(this.personnelEquipmentAssignments.values()).filter(
+      assignment => assignment.userId === userId && assignment.status === "active"
+    );
+  }
+
   // Combined personnel methods
   async getPersonnelWithCertifications(userId: string): Promise<{
     user: User;
     certifications: Certification[];
     medicalClearances: MedicalClearance[];
+    equipmentAssignments: PersonnelEquipmentAssignment[];
   } | undefined> {
     const user = await this.getUser(userId);
     if (!user) return undefined;
     
     const certifications = await this.listCertifications(userId);
     const medicalClearances = await this.listMedicalClearances(userId);
+    const equipmentAssignments = await this.getActiveEquipmentAssignments(userId);
     
-    return { user, certifications, medicalClearances };
+    return { user, certifications, medicalClearances, equipmentAssignments };
   }
 
   async listAllPersonnelWithCertifications(): Promise<Array<{
     user: User;
     certifications: Certification[];
     medicalClearances: MedicalClearance[];
+    equipmentAssignments: PersonnelEquipmentAssignment[];
   }>> {
     const users = await this.listUsers();
     const result = [];
@@ -1060,7 +1179,8 @@ export class MemStorage implements IStorage {
     for (const user of users) {
       const certifications = await this.listCertifications(user.id);
       const medicalClearances = await this.listMedicalClearances(user.id);
-      result.push({ user, certifications, medicalClearances });
+      const equipmentAssignments = await this.getActiveEquipmentAssignments(user.id);
+      result.push({ user, certifications, medicalClearances, equipmentAssignments });
     }
     
     return result;

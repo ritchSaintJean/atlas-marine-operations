@@ -38,6 +38,7 @@ interface PersonnelMember {
   };
   certifications: Certification[];
   medicalClearances: MedicalClearance[];
+  equipmentAssignments: EquipmentAssignment[];
 }
 
 interface Certification {
@@ -65,6 +66,16 @@ interface MedicalClearance {
   restrictions?: string[];
   isExpired: boolean;
   isExpiringSoon: boolean;
+}
+
+interface EquipmentAssignment {
+  id: string;
+  equipmentId: string;
+  projectId?: string;
+  assignedDate: string;
+  purpose: string;
+  notes?: string;
+  status: string;
 }
 
 export default function Personnel() {
@@ -117,6 +128,15 @@ export default function Personnel() {
         isExpiringSoon: clearance.expirationDate && 
           new Date(clearance.expirationDate) > new Date() && 
           new Date(clearance.expirationDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      })),
+      equipmentAssignments: item.equipmentAssignments.map((assignment: any) => ({
+        id: assignment.id,
+        equipmentId: assignment.equipmentId,
+        projectId: assignment.projectId,
+        assignedDate: assignment.assignedDate,
+        purpose: assignment.purpose,
+        notes: assignment.notes,
+        status: assignment.status
       }))
     }))
   });

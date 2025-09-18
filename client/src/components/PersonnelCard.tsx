@@ -13,7 +13,8 @@ import {
   FileText,
   Award,
   Eye,
-  Edit
+  Edit,
+  Settings
 } from "lucide-react";
 
 interface PersonnelMember {
@@ -54,6 +55,15 @@ interface PersonnelMember {
     restrictions?: string[];
     isExpired: boolean;
     isExpiringSoon: boolean;
+  }>;
+  equipmentAssignments?: Array<{
+    id: string;
+    equipmentId: string;
+    projectId?: string;
+    assignedDate: string;
+    purpose: string;
+    notes?: string;
+    status: string;
   }>;
 }
 
@@ -292,6 +302,38 @@ export default function PersonnelCard({ person, onEdit, onViewDetails }: Personn
                   ))}
                 </div>
               </div>
+
+              {/* Equipment Assignments */}
+              {person.equipmentAssignments && person.equipmentAssignments.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-2 flex items-center gap-1">
+                    <Settings className="w-4 h-4" />
+                    Current Equipment Assignments
+                  </h4>
+                  <div className="space-y-2">
+                    {person.equipmentAssignments.slice(0, 3).map((assignment) => (
+                      <div key={assignment.id} className="p-2 bg-muted rounded-md" data-testid={`assignment-item-${assignment.id}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-sm font-medium" data-testid={`text-equipment-${assignment.equipmentId}`}>
+                            {assignment.equipmentId.replace('eq-', '').replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                          </p>
+                          <Badge variant="outline" data-testid={`badge-purpose-${assignment.id}`}>
+                            {assignment.purpose.replace('_', ' ')}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground" data-testid={`text-assigned-date-${assignment.id}`}>
+                          Assigned: {new Date(assignment.assignedDate).toLocaleDateString()}
+                        </p>
+                        {assignment.notes && (
+                          <p className="text-xs text-muted-foreground mt-1" data-testid={`text-notes-${assignment.id}`}>
+                            {assignment.notes}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Actions */}
               <div className="flex gap-2 pt-2">
