@@ -110,6 +110,8 @@ export class EpmService {
       throw new Error('Checklist template not found');
     }
 
+    console.log(`[EPM] Template found: ${template.name}, items:`, template.items);
+
     if (stageId) {
       const stage = await storage.getProjectStage(stageId);
       if (!stage || stage.projectId !== projectId) {
@@ -131,14 +133,16 @@ export class EpmService {
     const checklist = await storage.createProjectChecklist(checklistData);
 
     // Create checklist items from template
-    const templateItems = await storage.listChecklistTemplateItems(templateId);
+    // Use template.items (JSON field) instead of separate checklist_template_items table
+    const templateItems = template.items as any[] || [];
+    console.log(`[EPM] Template items count: ${templateItems.length}`, templateItems);
     const checklistItems: ChecklistItem[] = [];
 
     for (const templateItem of templateItems) {
       const itemData: InsertChecklistItem = {
         id: randomUUID(),
         projectChecklistId: checklist.id,
-        templateItemId: templateItem.id,
+        templateItemId: templateItem.id || randomUUID(), // Use template item ID or generate new
         value: null,
         status: 'pending',
         assigneeId: null,
@@ -149,14 +153,16 @@ export class EpmService {
       };
 
       const item = await storage.createChecklistItem(itemData);
-      checklistItems.push({
+      const checklistItem = {
         ...item,
-        label: templateItem.label,
+        label: templateItem.text || templateItem.label || 'Checklist Item',
         type: templateItem.type as any,
-        required: templateItem.required,
-        validations: templateItem.validations,
+        required: templateItem.required || false,
+        validations: templateItem.validations || null,
         assigneeName: null,
-      });
+      };
+      console.log(`[EPM] Created checklist item:`, checklistItem);
+      checklistItems.push(checklistItem);
     }
 
     // Log checklist creation
@@ -171,6 +177,8 @@ export class EpmService {
 
     const requiredItems = checklistItems.filter(item => item.required);
     const optionalItems = checklistItems.filter(item => !item.required);
+    
+    console.log(`[EPM] Final checklist - Total items: ${checklistItems.length}, Required: ${requiredItems.length}, Optional: ${optionalItems.length}`);
 
     return {
       ...checklist,

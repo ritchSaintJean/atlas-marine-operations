@@ -24,7 +24,8 @@ export function useCreateStages() {
   
   return useMutation<Stage[], Error, { projectId: string; stages: StageCreate[] }>({
     mutationFn: async ({ projectId, stages }) => {
-      return apiRequest(`/api/projects/${projectId}/stages`, "POST", { stages });
+      const response = await apiRequest("POST", `/api/projects/${projectId}/stages`, { stages });
+      return response.json();
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({
@@ -50,7 +51,8 @@ export function useCreateChecklist() {
   
   return useMutation<Checklist, Error, { projectId: string } & ChecklistFromTemplate>({
     mutationFn: async ({ projectId, ...checklistData }) => {
-      return apiRequest(`/api/projects/${projectId}/checklists`, "POST", checklistData);
+      const response = await apiRequest("POST", `/api/projects/${projectId}/checklists`, checklistData);
+      return response.json();
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({
@@ -80,7 +82,8 @@ export function useUpdateChecklistItem() {
   
   return useMutation<ChecklistItem, Error, { itemId: string } & ChecklistItemPatch>({
     mutationFn: async ({ itemId, ...patchData }) => {
-      return apiRequest(`/api/checklist-items/${itemId}`, "PATCH", patchData);
+      const response = await apiRequest("PATCH", `/api/checklist-items/${itemId}`, patchData);
+      return response.json();
     },
     onSuccess: (updatedItem) => {
       // Invalidate the checklist this item belongs to
@@ -113,7 +116,8 @@ export function useApproveStage() {
     approval: StageApprove;
   }>({
     mutationFn: async ({ projectId, stageId, approval }) => {
-      return apiRequest(`/api/projects/${projectId}/stages/${stageId}/approve`, "POST", approval);
+      const response = await apiRequest("POST", `/api/projects/${projectId}/stages/${stageId}/approve`, approval);
+      return response.json();
     },
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({
