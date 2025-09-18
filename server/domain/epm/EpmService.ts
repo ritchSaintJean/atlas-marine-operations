@@ -112,7 +112,7 @@ export class EpmService {
       throw new Error('Checklist template not found');
     }
 
-    console.log(`[EPM] Template found: ${template.name}, items:`, template.items);
+    // Template found and validated
 
     if (stageId) {
       const stage = await storage.getProjectStage(stageId);
@@ -137,7 +137,6 @@ export class EpmService {
     // Create checklist items from template
     // Use template.items (JSON field) instead of separate checklist_template_items table
     const templateItems = template.items as any[] || [];
-    console.log(`[EPM] Template items count: ${templateItems.length}`, templateItems);
     const checklistItems: ChecklistItem[] = [];
 
     for (const templateItem of templateItems) {
@@ -167,7 +166,6 @@ export class EpmService {
         status: item.status as 'pending' | 'complete' | 'na' | 'blocked',
         assigneeName: undefined,
       };
-      console.log(`[EPM] Created checklist item:`, checklistItem);
       checklistItems.push(checklistItem);
     }
 
@@ -183,8 +181,6 @@ export class EpmService {
 
     const requiredItems = checklistItems.filter(item => item.required);
     const optionalItems = checklistItems.filter(item => !item.required);
-    
-    console.log(`[EPM] Final checklist - Total items: ${checklistItems.length}, Required: ${requiredItems.length}, Optional: ${optionalItems.length}`);
 
     return {
       ...checklist,

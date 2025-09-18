@@ -103,7 +103,6 @@ export default function EnhancedProjectManagement() {
       });
 
       // Also create a demo checklist template for use later
-      console.log("[EPM Frontend] Creating demo checklist template...");
       const templateResponse = await apiRequest("POST", "/api/checklist-templates", {
         name: "Hull Blast Inspection Demo",
         type: "quality-control",
@@ -139,7 +138,6 @@ export default function EnhancedProjectManagement() {
         ]
       });
       const createdTemplate = await templateResponse.json();
-      console.log("[EPM Frontend] Template created:", createdTemplate);
 
       toast({
         title: "Demo Setup Complete", 
@@ -159,10 +157,8 @@ export default function EnhancedProjectManagement() {
     
     try {
       // Get the available templates to use the first one
-      console.log("[EPM Frontend] Fetching available templates...");
       const templatesResponse = await apiRequest("GET", "/api/checklist-templates");
       const templates = await templatesResponse.json();
-      console.log("[EPM Frontend] Available templates:", templates);
       
       if (templates.length === 0) {
         throw new Error("No checklist templates available. Create a project first.");

@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { EpmService } from "../domain/epm/EpmService";
+import { storage } from "../storage";
 import {
   stageCreateSchema,
   checklistFromTemplateSchema,
@@ -119,6 +120,3 @@ export function registerEpmRoutes(app: Express) {
     }
   });
 }
-
-// Import storage for checklist listing
-import { storage } from "../storage";
