@@ -18,7 +18,13 @@ import {
   type CertificationWorkflow, type InsertCertificationWorkflow,
   type Notification, type InsertNotification,
   type CertificationDocument, type InsertCertificationDocument,
-  type WorkflowApproval, type InsertWorkflowApproval
+  type WorkflowApproval, type InsertWorkflowApproval,
+  type ProjectStage, type InsertProjectStage,
+  type ChecklistTemplateItem, type InsertChecklistTemplateItem,
+  type ProjectChecklist, type InsertProjectChecklist,
+  type ChecklistItem, type InsertChecklistItem,
+  type StageApproval, type InsertStageApproval,
+  type AuditLog, type InsertAuditLog
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
@@ -188,6 +194,42 @@ export interface IStorage {
   getWorkflowApproval(id: string): Promise<WorkflowApproval | undefined>;
   listWorkflowApprovals(workflowId?: string, approverId?: string): Promise<WorkflowApproval[]>;
   createWorkflowApproval(approval: InsertWorkflowApproval): Promise<WorkflowApproval>;
+
+  // Enhanced Project Management (EPM) - Project Stages
+  getProjectStage(id: string): Promise<ProjectStage | undefined>;
+  listProjectStages(projectId: string): Promise<ProjectStage[]>;
+  createProjectStage(stage: InsertProjectStage): Promise<ProjectStage>;
+  updateProjectStage(id: string, updates: Partial<ProjectStage>): Promise<ProjectStage | undefined>;
+
+  // EPM - Checklist Template Items
+  getChecklistTemplateItem(id: string): Promise<ChecklistTemplateItem | undefined>;
+  listChecklistTemplateItems(templateId: string): Promise<ChecklistTemplateItem[]>;
+  createChecklistTemplateItem(item: InsertChecklistTemplateItem): Promise<ChecklistTemplateItem>;
+  updateChecklistTemplateItem(id: string, updates: Partial<ChecklistTemplateItem>): Promise<ChecklistTemplateItem | undefined>;
+
+  // EPM - Project Checklists
+  getProjectChecklist(id: string): Promise<ProjectChecklist | undefined>;
+  listProjectChecklists(projectId?: string): Promise<ProjectChecklist[]>;
+  listProjectChecklistsByStage(stageId: string): Promise<ProjectChecklist[]>;
+  createProjectChecklist(checklist: InsertProjectChecklist): Promise<ProjectChecklist>;
+  updateProjectChecklist(id: string, updates: Partial<ProjectChecklist>): Promise<ProjectChecklist | undefined>;
+
+  // EPM - Checklist Items
+  getChecklistItem(id: string): Promise<ChecklistItem | undefined>;
+  listChecklistItems(checklistId: string): Promise<ChecklistItem[]>;
+  createChecklistItem(item: InsertChecklistItem): Promise<ChecklistItem>;
+  updateChecklistItem(id: string, updates: Partial<ChecklistItem>): Promise<ChecklistItem | undefined>;
+
+  // EPM - Stage Approvals
+  getStageApproval(id: string): Promise<StageApproval | undefined>;
+  listStageApprovals(projectId: string, stageId: string): Promise<StageApproval[]>;
+  createStageApproval(approval: InsertStageApproval): Promise<StageApproval>;
+  updateStageApproval(id: string, updates: Partial<StageApproval>): Promise<StageApproval | undefined>;
+
+  // EPM - Audit Logs
+  getAuditLog(id: string): Promise<AuditLog | undefined>;
+  listAuditLogs(entityType?: string, entityId?: string): Promise<AuditLog[]>;
+  createAuditLog(log: InsertAuditLog): Promise<AuditLog>;
 }
 
 export class MemStorage implements IStorage {
@@ -213,6 +255,14 @@ export class MemStorage implements IStorage {
   private notifications: Map<string, Notification>;
   private certificationDocuments: Map<string, CertificationDocument>;
   private workflowApprovals: Map<string, WorkflowApproval>;
+  
+  // EPM data stores
+  private projectStages: Map<string, ProjectStage>;
+  private checklistTemplateItems: Map<string, ChecklistTemplateItem>;
+  private projectChecklists: Map<string, ProjectChecklist>;
+  private checklistItems: Map<string, ChecklistItem>;
+  private stageApprovals: Map<string, StageApproval>;
+  private auditLogs: Map<string, AuditLog>;
 
   constructor() {
     this.users = new Map();
@@ -237,6 +287,14 @@ export class MemStorage implements IStorage {
     this.notifications = new Map();
     this.certificationDocuments = new Map();
     this.workflowApprovals = new Map();
+    
+    // Initialize EPM data stores
+    this.projectStages = new Map();
+    this.checklistTemplateItems = new Map();
+    this.projectChecklists = new Map();
+    this.checklistItems = new Map();
+    this.stageApprovals = new Map();
+    this.auditLogs = new Map();
     
     this.initializeDefaultData();
   }
@@ -1711,6 +1769,219 @@ export class MemStorage implements IStorage {
     };
     this.workflowApprovals.set(id, workflowApproval);
     return workflowApproval;
+  }
+
+  // Enhanced Project Management (EPM) Implementation
+
+  // Project Stages
+  async getProjectStage(id: string): Promise<ProjectStage | undefined> {
+    return this.projectStages.get(id);
+  }
+
+  async listProjectStages(projectId: string): Promise<ProjectStage[]> {
+    return Array.from(this.projectStages.values()).filter(stage => stage.projectId === projectId);
+  }
+
+  async createProjectStage(stage: InsertProjectStage): Promise<ProjectStage> {
+    const id = stage.id || randomUUID();
+    const newStage: ProjectStage = {
+      ...stage,
+      id,
+      requiredApproverRole: stage.requiredApproverRole || null,
+      gateRules: stage.gateRules || {},
+      createdAt: stage.createdAt || new Date(),
+      updatedAt: stage.updatedAt || new Date(),
+    };
+    
+    this.projectStages.set(id, newStage);
+    return newStage;
+  }
+
+  async updateProjectStage(id: string, updates: Partial<ProjectStage>): Promise<ProjectStage | undefined> {
+    const stage = this.projectStages.get(id);
+    if (!stage) return undefined;
+
+    const updated: ProjectStage = { ...stage, ...updates, updatedAt: new Date() };
+    this.projectStages.set(id, updated);
+    return updated;
+  }
+
+  // Checklist Template Items
+  async getChecklistTemplateItem(id: string): Promise<ChecklistTemplateItem | undefined> {
+    return this.checklistTemplateItems.get(id);
+  }
+
+  async listChecklistTemplateItems(templateId: string): Promise<ChecklistTemplateItem[]> {
+    return Array.from(this.checklistTemplateItems.values())
+      .filter(item => item.templateId === templateId)
+      .sort((a, b) => a.order - b.order);
+  }
+
+  async createChecklistTemplateItem(item: InsertChecklistTemplateItem): Promise<ChecklistTemplateItem> {
+    const id = item.id || randomUUID();
+    const newItem: ChecklistTemplateItem = {
+      ...item,
+      id,
+      order: item.order || 0,
+      required: item.required || false,
+      validations: item.validations || {},
+      createdAt: item.createdAt || new Date(),
+    };
+    
+    this.checklistTemplateItems.set(id, newItem);
+    return newItem;
+  }
+
+  async updateChecklistTemplateItem(id: string, updates: Partial<ChecklistTemplateItem>): Promise<ChecklistTemplateItem | undefined> {
+    const item = this.checklistTemplateItems.get(id);
+    if (!item) return undefined;
+
+    const updated: ChecklistTemplateItem = { ...item, ...updates };
+    this.checklistTemplateItems.set(id, updated);
+    return updated;
+  }
+
+  // Project Checklists
+  async getProjectChecklist(id: string): Promise<ProjectChecklist | undefined> {
+    return this.projectChecklists.get(id);
+  }
+
+  async listProjectChecklists(projectId?: string): Promise<ProjectChecklist[]> {
+    if (!projectId) {
+      return Array.from(this.projectChecklists.values());
+    }
+    return Array.from(this.projectChecklists.values()).filter(checklist => checklist.projectId === projectId);
+  }
+
+  async listProjectChecklistsByStage(stageId: string): Promise<ProjectChecklist[]> {
+    return Array.from(this.projectChecklists.values()).filter(checklist => checklist.stageId === stageId);
+  }
+
+  async createProjectChecklist(checklist: InsertProjectChecklist): Promise<ProjectChecklist> {
+    const id = checklist.id || randomUUID();
+    const newChecklist: ProjectChecklist = {
+      ...checklist,
+      id,
+      status: checklist.status || 'not_started',
+      stageId: checklist.stageId || null,
+      createdAt: checklist.createdAt || new Date(),
+      updatedAt: checklist.updatedAt || new Date(),
+    };
+    
+    this.projectChecklists.set(id, newChecklist);
+    return newChecklist;
+  }
+
+  async updateProjectChecklist(id: string, updates: Partial<ProjectChecklist>): Promise<ProjectChecklist | undefined> {
+    const checklist = this.projectChecklists.get(id);
+    if (!checklist) return undefined;
+
+    const updated: ProjectChecklist = { ...checklist, ...updates, updatedAt: new Date() };
+    this.projectChecklists.set(id, updated);
+    return updated;
+  }
+
+  // Checklist Items
+  async getChecklistItem(id: string): Promise<ChecklistItem | undefined> {
+    return this.checklistItems.get(id);
+  }
+
+  async listChecklistItems(checklistId: string): Promise<ChecklistItem[]> {
+    return Array.from(this.checklistItems.values()).filter(item => item.projectChecklistId === checklistId);
+  }
+
+  async createChecklistItem(item: InsertChecklistItem): Promise<ChecklistItem> {
+    const id = item.id || randomUUID();
+    const newItem: ChecklistItem = {
+      ...item,
+      id,
+      value: item.value || null,
+      status: item.status || 'pending',
+      assigneeId: item.assigneeId || null,
+      dueAt: item.dueAt || null,
+      completedAt: item.completedAt || null,
+      createdAt: item.createdAt || new Date(),
+      updatedAt: item.updatedAt || new Date(),
+    };
+    
+    this.checklistItems.set(id, newItem);
+    return newItem;
+  }
+
+  async updateChecklistItem(id: string, updates: Partial<ChecklistItem>): Promise<ChecklistItem | undefined> {
+    const item = this.checklistItems.get(id);
+    if (!item) return undefined;
+
+    const updated: ChecklistItem = { ...item, ...updates, updatedAt: new Date() };
+    this.checklistItems.set(id, updated);
+    return updated;
+  }
+
+  // Stage Approvals
+  async getStageApproval(id: string): Promise<StageApproval | undefined> {
+    return this.stageApprovals.get(id);
+  }
+
+  async listStageApprovals(projectId: string, stageId: string): Promise<StageApproval[]> {
+    return Array.from(this.stageApprovals.values())
+      .filter(approval => approval.projectId === projectId && approval.stageId === stageId);
+  }
+
+  async createStageApproval(approval: InsertStageApproval): Promise<StageApproval> {
+    const id = approval.id || randomUUID();
+    const newApproval: StageApproval = {
+      ...approval,
+      id,
+      status: approval.status || 'pending',
+      note: approval.note || null,
+      decidedAt: approval.decidedAt || null,
+      createdAt: approval.createdAt || new Date(),
+    };
+    
+    this.stageApprovals.set(id, newApproval);
+    return newApproval;
+  }
+
+  async updateStageApproval(id: string, updates: Partial<StageApproval>): Promise<StageApproval | undefined> {
+    const approval = this.stageApprovals.get(id);
+    if (!approval) return undefined;
+
+    const updated: StageApproval = { ...approval, ...updates };
+    this.stageApprovals.set(id, updated);
+    return updated;
+  }
+
+  // Audit Logs
+  async getAuditLog(id: string): Promise<AuditLog | undefined> {
+    return this.auditLogs.get(id);
+  }
+
+  async listAuditLogs(entityType?: string, entityId?: string): Promise<AuditLog[]> {
+    let logs = Array.from(this.auditLogs.values());
+    
+    if (entityType) {
+      logs = logs.filter(log => log.entity === entityType);
+    }
+    
+    if (entityId) {
+      logs = logs.filter(log => log.entityId === entityId);
+    }
+    
+    return logs.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  }
+
+  async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
+    const id = randomUUID();
+    const newLog: AuditLog = {
+      ...log,
+      id,
+      before: log.before || null,
+      after: log.after || null,
+      at: log.at || new Date(),
+    };
+    
+    this.auditLogs.set(id, newLog);
+    return newLog;
   }
 }
 

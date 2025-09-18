@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { config } from "./config";
 import { 
   insertUserSchema,
   insertProjectSchema,
@@ -23,7 +24,39 @@ import {
   insertWorkflowApprovalSchema
 } from "@shared/schema";
 
+import { registerEpmRoutes } from "./routes/epm.routes";
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  
+  // Health endpoints
+  app.get("/healthz", (req, res) => {
+    res.json({
+      status: "ok",
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+      commit: process.env.REPL_ID || "unknown"
+    });
+  });
+
+  app.get("/readyz", async (req, res) => {
+    try {
+      // Test database connectivity by trying to list users
+      await storage.listUsers();
+      res.json({
+        status: "ready",
+        database: "ok",
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      res.status(503).json({
+        status: "not ready",
+        database: "error",
+        error: error instanceof Error ? error.message : "Unknown error",
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
   // User routes
   app.post("/api/users", async (req, res) => {
     try {
@@ -776,6 +809,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({ error: "Invalid checklist instance data" });
     }
   });
+
+  // Register EPM routes
+  registerEpmRoutes(app);
 
   const httpServer = createServer(app);
 

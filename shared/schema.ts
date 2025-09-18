@@ -563,6 +563,96 @@ export const insertWorkflowApprovalSchema = createInsertSchema(workflowApprovals
   timestamp: z.string().transform(val => new Date(val)).optional(),
 });
 
+// Enhanced Project Management (EPM) Schema
+export const projectStages = pgTable("project_stages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull(),
+  name: text("name").notNull(),
+  order: integer("order").notNull(),
+  requiredApproverRole: text("required_approver_role"), // tech, supervisor, admin
+  gateRules: jsonb("gate_rules").notNull().default('{}'),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const checklistTemplateItems = pgTable("checklist_template_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").notNull(),
+  label: text("label").notNull(),
+  type: text("type").notNull(), // text, number, photo, signature, boolean, select
+  required: boolean("required").notNull().default(false),
+  validations: jsonb("validations").default('{}'),
+  order: integer("order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const projectChecklists = pgTable("project_checklists", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull(),
+  stageId: varchar("stage_id"),
+  templateId: varchar("template_id").notNull(),
+  status: text("status").notNull().default("not_started"), // not_started, in_progress, blocked, done
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const checklistItems = pgTable("checklist_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectChecklistId: varchar("project_checklist_id").notNull(),
+  templateItemId: varchar("template_item_id").notNull(),
+  value: jsonb("value"),
+  status: text("status").notNull().default("pending"), // pending, complete, na, blocked
+  assigneeId: varchar("assignee_id"),
+  dueAt: timestamp("due_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const stageApprovals = pgTable("stage_approvals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull(),
+  stageId: varchar("stage_id").notNull(),
+  approverId: varchar("approver_id").notNull(),
+  status: text("status").notNull().default("pending"), // pending, approved, rejected
+  note: text("note"),
+  decidedAt: timestamp("decided_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const auditLogs = pgTable("audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  actorId: varchar("actor_id").notNull(),
+  entity: text("entity").notNull(),
+  entityId: text("entity_id").notNull(),
+  action: text("action").notNull(),
+  before: jsonb("before"),
+  after: jsonb("after"),
+  at: timestamp("at").defaultNow().notNull(),
+});
+
+// EPM insert schemas
+export const insertProjectStageSchema = createInsertSchema(projectStages);
+export const insertChecklistTemplateItemSchema = createInsertSchema(checklistTemplateItems);
+export const insertProjectChecklistSchema = createInsertSchema(projectChecklists);
+export const insertChecklistItemSchema = createInsertSchema(checklistItems);
+export const insertStageApprovalSchema = createInsertSchema(stageApprovals);
+export const insertAuditLogSchema = createInsertSchema(auditLogs);
+
+// EPM types
+export type ProjectStage = typeof projectStages.$inferSelect;
+export type InsertProjectStage = z.infer<typeof insertProjectStageSchema>;
+export type ChecklistTemplateItem = typeof checklistTemplateItems.$inferSelect;
+export type InsertChecklistTemplateItem = z.infer<typeof insertChecklistTemplateItemSchema>;
+export type ProjectChecklist = typeof projectChecklists.$inferSelect;
+export type InsertProjectChecklist = z.infer<typeof insertProjectChecklistSchema>;
+export type ChecklistItem = typeof checklistItems.$inferSelect;
+export type InsertChecklistItem = z.infer<typeof insertChecklistItemSchema>;
+export type StageApproval = typeof stageApprovals.$inferSelect;
+export type InsertStageApproval = z.infer<typeof insertStageApprovalSchema>;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+
 // Workflow management types
 export type CertificationWorkflow = typeof certificationWorkflows.$inferSelect;
 export type InsertCertificationWorkflow = z.infer<typeof insertCertificationWorkflowSchema>;

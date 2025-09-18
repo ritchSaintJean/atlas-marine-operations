@@ -11,6 +11,7 @@ import Equipment from "@/pages/Equipment";
 import Safety from "@/pages/Safety";
 import Inventory from "@/pages/Inventory";
 import Personnel from "@/pages/Personnel";
+import EnhancedProjectManagement from "@/pages/EnhancedProjectManagement";
 import Checklists from "@/pages/Checklists";
 import Camera from "@/pages/Camera";
 import Profile from "@/pages/Profile";
@@ -28,6 +29,7 @@ function Router() {
       <Route path="/checklists" component={Checklists} />
       <Route path="/camera" component={Camera} />
       <Route path="/profile" component={Profile} />
+      <Route path="/epm" component={EnhancedProjectManagement} />
       <Route component={NotFound} />
     </Switch>
   );
